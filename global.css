@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.pt-4 {padding-top:16px;}
+.pb-2 {padding-bottom:8px;}
+
+

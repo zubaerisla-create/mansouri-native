@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "PePeep",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/images/logo.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.zubaer_official.RNWind",
+      "config": {
+        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "PePeep needs your location to show nearby restaurants.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "PePeep needs your location to show nearby restaurants and estimate delivery time.",
+        "NSLocationAlwaysUsageDescription": "PePeep needs your location to provide seamless delivery even when the app is in background."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/logo.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.zubaer_official.RNWind",
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+        }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-screen.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FF5101"
+        }
+      ],
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "39e2c14d-831f-473b-894d-fa14646b5046"
+      }
+    }
+  }
+}
