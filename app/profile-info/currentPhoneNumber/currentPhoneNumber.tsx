@@ -1,473 +1,386 @@
-// PhoneNumberScreen.tsx
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  View, 
-  TextInput, 
-  KeyboardAvoidingView, 
-  Platform, 
+import React, { useState, useRef, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
   TouchableOpacity,
-  ScrollView,
   Modal,
   FlatList,
   TouchableWithoutFeedback,
   useWindowDimensions,
   Alert,
-  Image
+  Image,
+  ActivityIndicator,
+  StyleSheet,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, useRouter } from 'expo-router';
-import { ChevronDown, X } from 'lucide-react-native';
-import { AppText as Text } from "@/src/components/AppText";
-import { useTranslation } from "@/src/hooks/useTranslation";
+import { useRouter } from 'expo-router';
+import { ChevronDown, X, Search, Phone, AlertCircle, CheckCircle2 } from 'lucide-react-native';
+import { useAuth } from '@/src/hooks/useAuth';
 
-// Country data type
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 interface Country {
   code: string;
   name: string;
   dialCode: string;
   flag: string;
+  minDigits: number;
+  maxDigits: number;
+  example: string;
 }
 
-// Sample country data (you can expand this list)
+// ─── Data ────────────────────────────────────────────────────────────────────
+
 const COUNTRIES: Country[] = [
-  { code: 'SA', name: 'Saudi Arabia', dialCode: '+966', flag: '🇸🇦' },
-  { code: 'US', name: 'United States', dialCode: '+1', flag: '🇺🇸' },
-  { code: 'GB', name: 'United Kingdom', dialCode: '+44', flag: '🇬🇧' },
-  { code: 'AE', name: 'United Arab Emirates', dialCode: '+971', flag: '🇦🇪' },
-  { code: 'IN', name: 'India', dialCode: '+91', flag: '🇮🇳' },
-  { code: 'PK', name: 'Pakistan', dialCode: '+92', flag: '🇵🇰' },
-  { code: 'EG', name: 'Egypt', dialCode: '+20', flag: '🇪🇬' },
-  { code: 'JO', name: 'Jordan', dialCode: '+962', flag: '🇯🇴' },
-  { code: 'KW', name: 'Kuwait', dialCode: '+965', flag: '🇰🇼' },
-  { code: 'QA', name: 'Qatar', dialCode: '+974', flag: '🇶🇦' },
-  { code: 'BH', name: 'Bahrain', dialCode: '+973', flag: '🇧🇭' },
-  { code: 'OM', name: 'Oman', dialCode: '+968', flag: '🇴🇲' },
+  { code: 'SA', name: 'Saudi Arabia',        dialCode: '+966', flag: '🇸🇦', minDigits: 9,  maxDigits: 9,  example: '501234567'   },
+  { code: 'US', name: 'United States',        dialCode: '+1',   flag: '🇺🇸', minDigits: 10, maxDigits: 10, example: '2025551234'  },
+  { code: 'GB', name: 'United Kingdom',       dialCode: '+44',  flag: '🇬🇧', minDigits: 10, maxDigits: 11, example: '7911123456'  },
+  { code: 'AE', name: 'United Arab Emirates', dialCode: '+971', flag: '🇦🇪', minDigits: 9,  maxDigits: 9,  example: '501234567'   },
+  { code: 'IN', name: 'India',                dialCode: '+91',  flag: '🇮🇳', minDigits: 10, maxDigits: 10, example: '9123456789'  },
+  { code: 'PK', name: 'Pakistan',             dialCode: '+92',  flag: '🇵🇰', minDigits: 10, maxDigits: 10, example: '3001234567'  },
+  { code: 'EG', name: 'Egypt',                dialCode: '+20',  flag: '🇪🇬', minDigits: 10, maxDigits: 10, example: '1012345678'  },
+  { code: 'JO', name: 'Jordan',               dialCode: '+962', flag: '🇯🇴', minDigits: 9,  maxDigits: 9,  example: '791234567'   },
+  { code: 'KW', name: 'Kuwait',               dialCode: '+965', flag: '🇰🇼', minDigits: 8,  maxDigits: 8,  example: '51234567'    },
+  { code: 'QA', name: 'Qatar',                dialCode: '+974', flag: '🇶🇦', minDigits: 8,  maxDigits: 8,  example: '33123456'    },
+  { code: 'BH', name: 'Bahrain',              dialCode: '+973', flag: '🇧🇭', minDigits: 8,  maxDigits: 8,  example: '36001234'    },
+  { code: 'OM', name: 'Oman',                 dialCode: '+968', flag: '🇴🇲', minDigits: 8,  maxDigits: 8,  example: '91234567'    },
+  { code: 'BD', name: 'Bangladesh',           dialCode: '+880', flag: '🇧🇩', minDigits: 10, maxDigits: 10, example: '1712345678'  },
+  { code: 'TR', name: 'Turkey',               dialCode: '+90',  flag: '🇹🇷', minDigits: 10, maxDigits: 10, example: '5321234567'  },
+  { code: 'DE', name: 'Germany',              dialCode: '+49',  flag: '🇩🇪', minDigits: 10, maxDigits: 11, example: '15123456789' },
+  { code: 'FR', name: 'France',               dialCode: '+33',  flag: '🇫🇷', minDigits: 9,  maxDigits: 9,  example: '612345678'   },
+  { code: 'AU', name: 'Australia',            dialCode: '+61',  flag: '🇦🇺', minDigits: 9,  maxDigits: 9,  example: '412345678'   },
+  { code: 'CA', name: 'Canada',               dialCode: '+1',   flag: '🇨🇦', minDigits: 10, maxDigits: 10, example: '4161234567'  },
+  { code: 'NG', name: 'Nigeria',              dialCode: '+234', flag: '🇳🇬', minDigits: 10, maxDigits: 10, example: '8031234567'  },
 ];
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getDigits(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+function digitsNeeded(digits: string, country: Country): number {
+  if (digits.length > country.maxDigits) return -1; // too long
+  return Math.max(0, country.minDigits - digits.length);
+}
+
+function formatDisplay(digits: string, countryCode: string): string {
+  switch (countryCode) {
+    case 'SA': case 'AE':
+      if (digits.length <= 2) return digits;
+      if (digits.length <= 5) return `${digits.slice(0,2)} ${digits.slice(2)}`;
+      return `${digits.slice(0,2)} ${digits.slice(2,5)} ${digits.slice(5,9)}`;
+    case 'US': case 'CA':
+      if (digits.length <= 3) return digits;
+      if (digits.length <= 6) return `(${digits.slice(0,3)}) ${digits.slice(3)}`;
+      return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6,10)}`;
+    case 'IN': case 'BD': case 'PK': case 'EG': case 'TR': case 'NG':
+      if (digits.length <= 5) return digits;
+      return `${digits.slice(0,5)} ${digits.slice(5)}`;
+    default: {
+      const m = digits.match(/^(\d{0,3})(\d{0,3})(\d{0,4})(\d*)$/);
+      if (!m) return digits;
+      return m.slice(1).filter(Boolean).join(' ');
+    }
+  }
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export default function PhoneNumberScreen() {
-  const { t, isRTL } = useTranslation();
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneDigits, setPhoneDigits]         = useState('');
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
-  const [isCountryModalVisible, setIsCountryModalVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
+  const [modalVisible, setModalVisible]       = useState(false);
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [isSubmitting, setIsSubmitting]       = useState(false);
+  const [touched, setTouched]                 = useState(false);
+
+  const inputRef   = useRef<TextInput>(null);
+  const router     = useRouter();
   const { height } = useWindowDimensions();
-  const inputRef = useRef<TextInput>(null);
-  const router = useRouter();
+  const { changePhone } = useAuth();
 
-  const isButtonActive = phoneNumber.length >= 1 && !isSubmitting;
+  const isSmall = height < 680;
+  const scale   = isSmall ? 0.88 : height > 850 ? 1.06 : 1;
+  const fs = (n: number) => Math.round(n * scale);
+  const sp = (n: number) => Math.round(n * scale);
 
-  // Responsive scaling factors
-  const isSmallScreen = height < 700;
-  const isLargeScreen = height > 800;
-  
-  // Responsive font sizes
-  const getResponsiveFontSize = (baseSize: number) => {
-    if (isSmallScreen) return baseSize * 0.9;
-    if (isLargeScreen) return baseSize * 1.1;
-    return baseSize;
-  };
+  // ── Derived ──────────────────────────────────────────────────────────────
 
-  // Responsive spacing
-  const getResponsiveSpacing = (baseSpacing: number) => {
-    if (isSmallScreen) return baseSpacing * 0.8;
-    if (isLargeScreen) return baseSpacing * 1.2;
-    return baseSpacing;
-  };
+  const needed    = digitsNeeded(phoneDigits, selectedCountry);
+  const isTooLong = needed === -1;
+  const isReady   = needed === 0;
+  const displayVal = formatDisplay(phoneDigits, selectedCountry.code);
 
-  // Responsive padding
-  const responsivePadding = getResponsiveSpacing(24);
-  const responsiveMarginTop = getResponsiveSpacing(64);
-  const responsiveInputPadding = getResponsiveSpacing(14);
+  type HintState = 'idle' | 'warn' | 'ok';
+  const hintState: HintState = !touched ? 'idle' : isReady ? 'ok' : 'warn';
 
-  // Filter countries based on search
-  const filteredCountries = searchQuery 
-    ? COUNTRIES.filter(country => 
-        country.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        country.dialCode.includes(searchQuery) ||
-        country.code.toLowerCase().includes(searchQuery.toLowerCase())
+  const hintMessage = (() => {
+    if (!touched) return null;
+    if (isTooLong)  return `Too many digits — max ${selectedCountry.maxDigits} for ${selectedCountry.name}`;
+    if (needed > 0) return `${needed} more digit${needed > 1 ? 's' : ''} needed for ${selectedCountry.name}`;
+    return 'Looks good!';
+  })();
+
+  const filteredCountries = searchQuery.trim()
+    ? COUNTRIES.filter(c =>
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.dialCode.includes(searchQuery) ||
+        c.code.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : COUNTRIES;
 
-  // Handle country selection
-  const handleCountrySelect = (country: Country) => {
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
+  const onCountrySelect = useCallback((country: Country) => {
     setSelectedCountry(country);
-    setIsCountryModalVisible(false);
+    setModalVisible(false);
     setSearchQuery('');
-    // Focus on phone input after country selection
-    setTimeout(() => inputRef.current?.focus(), 100);
+    setPhoneDigits('');
+    setTouched(false);
+    setTimeout(() => inputRef.current?.focus(), 150);
+  }, []);
+
+  const onPhoneChange = (value: string) => {
+    const digits = getDigits(value).slice(0, selectedCountry.maxDigits + 1);
+    setPhoneDigits(digits);
   };
 
-  // Validate phone number
-  const validatePhoneNumber = (number: string): boolean => {
-    // Remove all non-digit characters
-    const cleanedNumber = number.replace(/\D/g, '');
-    
-    // Basic validation - check if it's a valid length (usually 7-15 digits)
-    // You can adjust this based on your requirements
-    if (cleanedNumber.length < 7 || cleanedNumber.length > 15) {
-      return false;
-    }
-    
-    // Additional validation based on country code if needed
-    switch (selectedCountry.code) {
-      case 'SA': // Saudi Arabia
-        return cleanedNumber.length === 9; // Saudi numbers are 9 digits without country code
-      case 'US':
-        return cleanedNumber.length === 10; // US numbers are 10 digits
-      case 'IN':
-        return cleanedNumber.length === 10; // Indian numbers are 10 digits
-      default:
-        return cleanedNumber.length >= 7 && cleanedNumber.length <= 15;
-    }
-  };
-
-  // Format phone number
-  const formatPhoneNumber = (value: string): string => {
-    // Remove all non-digit characters
-    const cleaned = value.replace(/\D/g, '');
-    
-    // Format based on country
-    switch (selectedCountry.code) {
-      case 'SA': // Saudi Arabia format: 5XX XXX XXXX
-        if (cleaned.length <= 3) return cleaned;
-        if (cleaned.length <= 6) return `${cleaned.slice(0, 3)} ${cleaned.slice(3)}`;
-        return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6, 9)}`;
-      case 'US': // US format: (XXX) XXX-XXXX
-        if (cleaned.length <= 3) return cleaned;
-        if (cleaned.length <= 6) return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
-        return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
-      default:
-        // Default formatting: groups of 3 or 4 digits
-        const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
-        if (!match) return cleaned;
-        const groups = match.slice(1).filter(Boolean);
-        return groups.join(' ');
-    }
-  };
-
-  // Handle phone number change
-  const handlePhoneNumberChange = (value: string) => {
-    // Remove any formatting for storage
-    const cleaned = value.replace(/\D/g, '');
-    setPhoneNumber(cleaned);
-    setError(null); // Clear any previous errors
-  };
-
-  // Handle submit
-  const handleSubmit = async () => {
-    if (!phoneNumber || phoneNumber.length < 1) {
-      setError(t('phoneErrorEmpty'));
-      return;
-    }
-
-    if (!validatePhoneNumber(phoneNumber)) {
-      setError(t('phoneErrorInvalid'));
-      return;
-    }
+  const onSubmit = async () => {
+    Keyboard.dismiss();
+    setTouched(true);
+    if (!isReady) return;
 
     try {
       setIsSubmitting(true);
-      setError(null);
+      const fullPhone = `${selectedCountry.dialCode}${phoneDigits}`;
+      const success = await changePhone(fullPhone);
 
-      // Format the phone number for display
-      const formattedPhoneNumber = formatPhoneNumber(phoneNumber);
-      
-      // Here you would typically make an API call to send OTP
-      // For now, we'll simulate an API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Navigate to OTP verification screen
-      router.push({
-        pathname: "/(auth)/verify-otp",
-        params: { 
-          phoneNumber: `${selectedCountry.dialCode}${phoneNumber}`,
-          formattedPhoneNumber: `${selectedCountry.dialCode} ${formattedPhoneNumber}`,
-          countryCode: selectedCountry.code 
-        }
-      });
-
-    } catch (err) {
-      console.error('Error submitting phone number:', err);
-      Alert.alert(
-        t('error'),
-        t('tryAgainError'),
-        [{ text: t('ok') }]
-      );
+      if (success) {
+        const formatted = formatDisplay(phoneDigits, selectedCountry.code);
+        router.push({
+          pathname: '/profile-info/verifyCode/verifyCode',
+          params: {
+            phoneNumber:          fullPhone,
+            formattedPhoneNumber: `${selectedCountry.dialCode} ${formatted}`,
+          },
+        });
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send verification code. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Handle keyboard submit
-  const handleKeyPress = ({ nativeEvent }: any) => {
-    if (nativeEvent.key === 'Enter' || nativeEvent.key === 'done') {
-      handleSubmit();
-    }
-  };
-
-  // Render country item in modal
-  const renderCountryItem = ({ item }: { item: Country }) => (
-    <TouchableOpacity
-      className="flex-row items-center py-3 px-4 border-b border-gray-100 active:bg-gray-50"
-      onPress={() => handleCountrySelect(item)}
-    >
-      <Text className={`text-2xl ${isRTL ? 'ml-3' : 'mr-3'}`}>{item.flag}</Text>
-      <Text className={`flex-1 text-gray-800 font-medium ${isRTL ? 'text-right' : 'text-left'}`} style={{ fontSize: getResponsiveFontSize(16) }}>
-        {item.name}
-      </Text>
-      <Text className="text-gray-600" style={{ fontSize: getResponsiveFontSize(16) }}>
-        {item.dialCode}
-      </Text>
-    </TouchableOpacity>
-  );
+  // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <ScrollView 
-          contentContainerStyle={{ flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View className="flex-1 px-4 md:px-8" style={{ paddingHorizontal: responsivePadding }}>
-            <View className="flex-1 justify-between min-h-[500]">
-              
-              {/* Top Section */}
-    <View className="pt-16">
-  {/* Logo */}
-  <Image
-    source={require('@/assets/images/artboard.png')}
-    style={{
-      width: 120,
-      
-      resizeMode: 'contain',
-      alignSelf: 'center',
-      marginBottom: getResponsiveSpacing(20),
-    }}
-  />
+        {/* Content */}
+        <View style={[styles.content, { paddingHorizontal: sp(24) }]}>
 
-  {/* Title */}
-  <Text bold
-    className={`text-gray-800 font-semibold ${isRTL ? 'text-right' : 'text-left'}`}
-    style={{ 
-      fontSize: getResponsiveFontSize(22),
-      marginBottom: getResponsiveSpacing(2)
-    }}
-  >
-    {t('phoneNumberTitle')}
-  </Text>
+          <Image
+            source={require('@/assets/images/artboard.png')}
+            style={[styles.logo, { marginTop: sp(isSmall ? 12 : 28), marginBottom: sp(18) }]}
+            resizeMode="contain"
+          />
 
-  {/* Subtitle */}
-  <Text 
-    className={`text-gray-500 ${isRTL ? 'text-right' : 'text-left'}`}
-    style={{ 
-      fontSize: getResponsiveFontSize(16),
-      marginBottom: getResponsiveSpacing(40),
-      lineHeight: getResponsiveFontSize(24)
-    }}
-  >
-    {t('enterYourPhoneNumberSubtitle')}
-  </Text>
+          <Text style={[styles.title, { fontSize: fs(24), marginBottom: sp(4) }]}>
+            Phone Number
+          </Text>
+          <Text style={[styles.subtitle, { fontSize: fs(14), marginBottom: sp(26) }]}>
+            Enter your number to receive a verification code
+          </Text>
 
-  {/* Input Container */}
-  <View className="w-full max-w-md mx-auto">
-    <View 
-      className={`flex-row items-center border rounded-xl px-4 bg-gray-50 ${
-        error ? 'border-red-500' : 'border-gray-300'
-      }`}
-      style={{ 
-        paddingVertical: responsiveInputPadding,
-        minHeight: getResponsiveSpacing(56)
-      }}
-    >
-      {/* Country Code Selector */}
-      <TouchableOpacity
-        className={`flex-row items-center active:opacity-70 ${isRTL ? 'ml-3' : 'mr-3'}`}
-        onPress={() => setIsCountryModalVisible(true)}
-        activeOpacity={0.7}
-        disabled={isSubmitting}
-      >
-        <Text 
-          className={isRTL ? "ml-1.5" : "mr-1.5"}
-          style={{ fontSize: getResponsiveFontSize(24) }}
-        >
-          {selectedCountry.flag}
-        </Text>
-        <Text bold
-          className={`font-medium text-gray-800 ${isRTL ? 'ml-1' : 'mr-1'}`}
-          style={{ fontSize: getResponsiveFontSize(18) }}
-        >
-          {selectedCountry.dialCode}
-        </Text>
-        <ChevronDown size={getResponsiveFontSize(18)} color="#4B5563" />
-      </TouchableOpacity>
+          {/* Input row */}
+          <View style={[
+            styles.inputRow,
+            { paddingVertical: sp(12), minHeight: sp(54) },
+            hintState === 'warn' ? styles.rowError
+              : hintState === 'ok' ? styles.rowOk
+              : styles.rowIdle,
+          ]}>
+            {/* Country picker */}
+            <TouchableOpacity
+              style={styles.picker}
+              onPress={() => setModalVisible(true)}
+              activeOpacity={0.6}
+              disabled={isSubmitting}
+              hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+            >
+              <Text style={{ fontSize: fs(20) }}>{selectedCountry.flag}</Text>
+              <Text style={[styles.dialCode, { fontSize: fs(15), marginLeft: 6 }]}>
+                {selectedCountry.dialCode}
+              </Text>
+              <ChevronDown size={fs(14)} color="#6B7280" style={{ marginLeft: 2 }} />
+            </TouchableOpacity>
 
-      {/* Separator */}
-      <View 
-        className="w-px mx-3 bg-gray-300"
-        style={{ height: getResponsiveSpacing(24) }}
-      />
+            <View style={[styles.sep, { height: sp(22) }]} />
 
-      {/* Phone input */}
-      <TextInput
-        ref={inputRef}
-        className={`flex-1 text-gray-900 ${isRTL ? 'text-right' : 'text-left'}`}
-        style={{ 
-          fontSize: getResponsiveFontSize(18),
-          minHeight: getResponsiveSpacing(24)
-        }}
-        placeholder={t('enterPhoneNumber')}
-        placeholderTextColor="#9CA3AF"
-        keyboardType="phone-pad"
-        maxLength={15}
-        value={formatPhoneNumber(phoneNumber)}
-        onChangeText={handlePhoneNumberChange}
-        onKeyPress={handleKeyPress}
-        autoFocus={!isSmallScreen}
-        returnKeyType="done"
-        enablesReturnKeyAutomatically
-        blurOnSubmit={false}
-        editable={!isSubmitting}
-      />
-    </View>
+            {/* Phone input */}
+            <TextInput
+              ref={inputRef}
+              style={[styles.textInput, { fontSize: fs(16) }]}
+              placeholder={`e.g. ${formatDisplay(selectedCountry.example, selectedCountry.code)}`}
+              placeholderTextColor="#C4C9D4"
+              keyboardType="phone-pad"
+              returnKeyType="done"
+              value={displayVal}
+              onChangeText={onPhoneChange}
+              onSubmitEditing={onSubmit}   // ✅ Done key works
+              blurOnSubmit={true}          // ✅ Keyboard dismisses on Done
+              maxLength={selectedCountry.maxDigits + 5}
+              editable={!isSubmitting}
+              autoFocus={!isSmall}
+            />
 
-    {/* Error message */}
-    {error && (
-      <Text 
-        className="text-red-500 text-center mt-2"
-        style={{ 
-          fontSize: getResponsiveFontSize(14),
-          lineHeight: getResponsiveFontSize(20)
-        }}
-      >
-        {error}
-      </Text>
-    )}
-
-    {/* Helper text */}
-    <Text 
-      className="text-gray-500 text-center mt-3"
-      style={{ 
-        fontSize: getResponsiveFontSize(14),
-        lineHeight: getResponsiveFontSize(20)
-      }}
-    >
-      {t('verificationHelper2')}
-    </Text>
-  </View>
-</View>
-
-
-              {/* Bottom Button */}
-              <View 
-                className="w-full max-w-md mx-auto"
-                style={{ 
-                  marginBottom: Platform.OS === 'ios' ? getResponsiveSpacing(20) : getResponsiveSpacing(32),
-                  marginTop: getResponsiveSpacing(20)
-                }}
-              >
-                <TouchableOpacity
-                  className={`
-                    w-full rounded-full items-center justify-center
-                    ${isButtonActive ? 'bg-orange-500' : 'bg-orange-300'}
-                    ${isSubmitting ? 'opacity-70' : ''}
-                  `}
-                  style={{ 
-                    paddingVertical: getResponsiveSpacing(16),
-                    minHeight: getResponsiveSpacing(56)
-                  }}
-                  disabled={!isButtonActive || isSubmitting}
-                  onPress={handleSubmit}
-                  activeOpacity={0.8}
-                >
-                  {isSubmitting ? (
-                    <Text bold
-                      className="text-white font-semibold"
-                      style={{ fontSize: getResponsiveFontSize(18) }}
-                    >
-                      {t('sending')}
-                    </Text>
-                  ) : (
-                    <Text bold
-                      className="text-white font-semibold"
-                      style={{ fontSize: getResponsiveFontSize(18) }}
-                    >
-                      {t('continue')}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-            </View>
+            {touched && (
+              isReady
+                ? <CheckCircle2 size={fs(18)} color="#22C55E" style={{ marginLeft: 8 }} />
+                : <AlertCircle  size={fs(18)} color="#EF4444" style={{ marginLeft: 8 }} />
+            )}
           </View>
-        </ScrollView>
+
+          {/* Inline hint line */}
+          {hintMessage && (
+            <View style={[styles.hintBox, hintState === 'ok' ? styles.hintOk : styles.hintWarn]}>
+              {hintState === 'ok'
+                ? <CheckCircle2 size={fs(12)} color="#16A34A" style={{ marginRight: 5 }} />
+                : <AlertCircle  size={fs(12)} color="#DC2626" style={{ marginRight: 5 }} />
+              }
+              <Text style={[styles.hintTxt, { fontSize: fs(12.5) }, hintState === 'ok' ? styles.hintTxtOk : styles.hintTxtWarn]}>
+                {hintMessage}
+              </Text>
+            </View>
+          )}
+
+          {/* Requirements card — only when invalid after tapping Continue */}
+          {touched && !isReady && (
+            <View style={styles.reqCard}>
+              <View style={styles.reqRow}>
+                <Phone size={fs(12)} color="#F97316" style={{ marginRight: 6 }} />
+                <Text style={[styles.reqTitle, { fontSize: fs(12.5) }]}>
+                  {selectedCountry.flag}  {selectedCountry.name} requirements
+                </Text>
+              </View>
+              <View style={styles.reqDivider} />
+              <Text style={[styles.reqLine, { fontSize: fs(12) }]}>
+                ● Digits required:{' '}
+                <Text style={styles.reqBold}>
+                  {selectedCountry.minDigits === selectedCountry.maxDigits
+                    ? `${selectedCountry.minDigits}`
+                    : `${selectedCountry.minDigits}–${selectedCountry.maxDigits}`}
+                </Text>
+              </Text>
+              <Text style={[styles.reqLine, { fontSize: fs(12), marginTop: 4 }]}>
+                ● You entered:{' '}
+                <Text style={[styles.reqBold, { color: isTooLong ? '#EF4444' : '#F97316' }]}>
+                  {phoneDigits.length} digit{phoneDigits.length !== 1 ? 's' : ''}
+                </Text>
+              </Text>
+              <Text style={[styles.reqLine, { fontSize: fs(12), marginTop: 4 }]}>
+                ● Example:{' '}
+                <Text style={styles.reqBold}>
+                  {selectedCountry.dialCode} {formatDisplay(selectedCountry.example, selectedCountry.code)}
+                </Text>
+              </Text>
+            </View>
+          )}
+
+          {/* Idle helper */}
+          {!touched && (
+            <Text style={[styles.helper, { fontSize: fs(12.5), marginTop: sp(8) }]}>
+              A one-time code will be sent to this number
+            </Text>
+          )}
+        </View>
+
+        {/* Continue button — always at bottom */}
+        <View style={[styles.footer, { paddingHorizontal: sp(24), paddingBottom: sp(Platform.OS === 'ios' ? 16 : 28) }]}>
+          <TouchableOpacity
+            style={[
+              styles.btn,
+              { paddingVertical: sp(15), minHeight: sp(52) },
+              isReady && !isSubmitting ? styles.btnActive : styles.btnDim,
+            ]}
+            onPress={onSubmit}
+            activeOpacity={0.82}
+            disabled={isSubmitting}
+          >
+            {isSubmitting
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={[styles.btnTxt, { fontSize: fs(16) }]}>Continue</Text>
+            }
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
 
-      {/* Country Selection Modal */}
+      {/* Country Modal */}
       <Modal
-        visible={isCountryModalVisible}
+        visible={modalVisible}
         animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsCountryModalVisible(false)}
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setModalVisible(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setIsCountryModalVisible(false)}>
-          <View className="flex-1 bg-black/50 justify-end">
+        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
+          <View style={styles.overlay}>
             <TouchableWithoutFeedback>
-              <View 
-                className="bg-white rounded-t-3xl max-h-3/4"
-                style={{ 
-                  paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-                }}
-              >
-                {/* Modal Header */}
-                <View className="flex-row items-center justify-between px-4 py-4 border-b border-gray-200">
-                  <Text bold
-                    className="text-gray-800 font-semibold"
-                    style={{ fontSize: getResponsiveFontSize(20) }}
-                  >
-                    {t('selectCountry')}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setIsCountryModalVisible(false)}
-                    className="p-2"
-                    activeOpacity={0.7}
-                  >
-                    <X size={getResponsiveFontSize(24)} color="#4B5563" />
+              <View style={[styles.sheet, { paddingBottom: Platform.OS === 'ios' ? 34 : 20 }]}>
+                <View style={styles.handle} />
+
+                <View style={styles.sheetHead}>
+                  <Text style={[styles.sheetTitle, { fontSize: fs(17) }]}>Select Country</Text>
+                  <TouchableOpacity onPress={() => setModalVisible(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <X size={fs(20)} color="#374151" />
                   </TouchableOpacity>
                 </View>
 
-                {/* Search Input */}
-                <View className="px-4 py-3 border-b border-gray-200">
+                <View style={styles.searchRow}>
+                  <Search size={fs(15)} color="#9CA3AF" style={{ marginRight: 8 }} />
                   <TextInput
-                    className={`bg-gray-100 rounded-lg px-4 py-3 text-gray-900 ${isRTL ? 'text-right' : 'text-left'}`}
-                    style={{ fontSize: getResponsiveFontSize(16) }}
-                    placeholder={t('searchCountry')}
+                    style={[styles.searchInput, { fontSize: fs(14) }]}
+                    placeholder="Search country or dial code…"
                     placeholderTextColor="#9CA3AF"
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    autoFocus={true}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    clearButtonMode="while-editing"
                   />
                 </View>
 
-                {/* Countries List */}
                 <FlatList
                   data={filteredCountries}
-                  renderItem={renderCountryItem}
-                  keyExtractor={(item) => item.code}
-                  showsVerticalScrollIndicator={true}
-                  className="max-h-96"
+                  keyExtractor={item => item.code}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  style={{ maxHeight: 420 }}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[styles.cRow, item.code === selectedCountry.code && styles.cRowSel]}
+                      onPress={() => onCountrySelect(item)}
+                      activeOpacity={0.65}
+                    >
+                      <Text style={{ fontSize: fs(20) }}>{item.flag}</Text>
+                      <Text style={[styles.cName, { fontSize: fs(14) }]}>{item.name}</Text>
+                      <Text style={[styles.cDial, { fontSize: fs(13) }]}>{item.dialCode}</Text>
+                    </TouchableOpacity>
+                  )}
                   ListEmptyComponent={
-                    <View className="py-8 items-center">
-                      <Text className="text-gray-500" style={{ fontSize: getResponsiveFontSize(16) }}>
-                        {t('noCountries')}
-                      </Text>
+                    <View style={styles.emptyBox}>
+                      <Text style={{ color: '#9CA3AF', fontSize: fs(13) }}>No countries found</Text>
                     </View>
                   }
                 />
@@ -478,4 +391,92 @@ export default function PhoneNumberScreen() {
       </Modal>
     </SafeAreaView>
   );
-}4
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: '#fff' },
+  flex:    { flex: 1 },
+  content: { flex: 1 },
+
+  logo:     { width: 110, height: 44, alignSelf: 'center' },
+  title:    { color: '#111827', fontWeight: '700', letterSpacing: -0.3 },
+  subtitle: { color: '#6B7280', lineHeight: 20 },
+
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 14,
+  },
+  rowIdle:  { borderColor: '#D1D5DB' },
+  rowError: { borderColor: '#EF4444', backgroundColor: '#FFF7F7' },
+  rowOk:    { borderColor: '#22C55E', backgroundColor: '#F0FDF4' },
+
+  picker:   { flexDirection: 'row', alignItems: 'center', paddingRight: 6 },
+  dialCode: { color: '#111827', fontWeight: '600' },
+  sep:      { width: 1, backgroundColor: '#D1D5DB', marginHorizontal: 12 },
+  textInput: {
+    flex: 1,
+    color: '#111827',
+    fontWeight: '500',
+    letterSpacing: 0.4,
+    paddingVertical: 0,
+  },
+
+  hintBox:    { flexDirection: 'row', alignItems: 'center', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, marginTop: 7 },
+  hintOk:     { backgroundColor: '#F0FDF4' },
+  hintWarn:   { backgroundColor: '#FEF2F2' },
+  hintTxt:    { flex: 1, lineHeight: 16 },
+  hintTxtOk:  { color: '#16A34A' },
+  hintTxtWarn:{ color: '#DC2626' },
+
+  reqCard:    { backgroundColor: '#FFFBF5', borderWidth: 1, borderColor: '#FED7AA', borderRadius: 12, padding: 12, marginTop: 8 },
+  reqRow:     { flexDirection: 'row', alignItems: 'center' },
+  reqDivider: { height: 1, backgroundColor: '#FED7AA', marginVertical: 8 },
+  reqTitle:   { color: '#92400E', fontWeight: '600' },
+  reqLine:    { color: '#78350F' },
+  reqBold:    { color: '#C2410C', fontWeight: '700' },
+
+  helper: { color: '#9CA3AF', textAlign: 'center', lineHeight: 18 },
+
+  footer: { paddingTop: 12 },
+  btn:    { width: '100%', borderRadius: 99, alignItems: 'center', justifyContent: 'center' },
+  btnActive: {
+    backgroundColor: '#F97316',
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  btnDim: { backgroundColor: '#FDBA74' },
+  btnTxt: { color: '#fff', fontWeight: '700', letterSpacing: 0.3 },
+
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet:   { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12 },
+  handle:  { width: 38, height: 4, backgroundColor: '#D1D5DB', borderRadius: 4, alignSelf: 'center', marginBottom: 12 },
+  sheetHead: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB',
+  },
+  sheetTitle: { color: '#111827', fontWeight: '700' },
+
+  searchRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F3F4F6', borderRadius: 12,
+    marginHorizontal: 16, marginVertical: 12,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  searchInput: { flex: 1, color: '#111827', padding: 0 },
+
+  cRow:    { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F3F4F6' },
+  cRowSel: { backgroundColor: '#FFF7ED' },
+  cName:   { flex: 1, color: '#111827', fontWeight: '500', marginLeft: 12 },
+  cDial:   { color: '#6B7280', fontWeight: '500' },
+  emptyBox: { paddingVertical: 36, alignItems: 'center' },
+});

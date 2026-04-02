@@ -1,9 +1,12 @@
-import { LanguageProvider } from "@/src/context/LanguageContext";
 import { CartProvider } from "@/src/context/CartContext";
+import { LanguageProvider } from "@/src/context/LanguageContext";
+import { loadStoredAuth } from "@/src/features/auth/authSlice";
+import { store } from "@/src/store";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { Image, View } from "react-native";
+import { Provider } from "react-redux";
 import "../global.css";
 
 SplashScreen.preventAutoHideAsync();
@@ -12,8 +15,10 @@ export default function RootLayout() {
   const [splash, setSplash] = useState(true);
 
   useEffect(() => {
-    SplashScreen.hideAsync(); // Expo splash তাৎক্ষণিক সরিয়ে দাও
+    // Restore authentication state
+    store.dispatch(loadStoredAuth() as any);
 
+    SplashScreen.hideAsync();
     const timer = setTimeout(() => {
       setSplash(false);
     }, 4000);
@@ -29,10 +34,12 @@ export default function RootLayout() {
   }
 
   return (
-    <LanguageProvider>
-      <CartProvider>
-        <Stack screenOptions={{ headerShown: false }} />
-      </CartProvider>
-    </LanguageProvider>
+    <Provider store={store}>
+      <LanguageProvider>
+        <CartProvider>
+          <Stack screenOptions={{ headerShown: false }} />
+        </CartProvider>
+      </LanguageProvider>
+    </Provider>
   );
 }

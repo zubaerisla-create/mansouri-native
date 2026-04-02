@@ -8,12 +8,19 @@ import {
   SafeAreaView,
   TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useAuth } from '@/src/hooks/useAuth';
+import { useAppSelector } from '@/src/hooks/useRedux';
+import { ActivityIndicator } from 'react-native';
 
 const CELL_COUNT = 6;
 
 export default function verifyCode() {
   const router = useRouter();
+  const { phoneNumber, formattedPhoneNumber } = useLocalSearchParams<{ phoneNumber: string, formattedPhoneNumber: string }>();
+  const { verifyNewPhone, isLoading } = useAuth();
+  const authToken = useAppSelector((state) => state.auth.token);
+  
   const [code, setCode] = useState<string[]>(Array(CELL_COUNT).fill(''));
   const [timeLeft, setTimeLeft] = useState(54);
   const inputs = useRef<TextInput[]>([]);
@@ -123,26 +130,35 @@ export default function verifyCode() {
         </TouchableOpacity>
       </View>
 
-      {/* Bottom Continue Button */}
-      <View className="px-6 pb-6">
-        <TouchableOpacity
-          disabled={!isCodeComplete}
-          onPress={() => {
-            if (isCodeComplete) {
-              console.log('OTP Entered:', code.join(''));
-              router.push('/(tabs)/More'); // Navigate to home after verification
+    <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
+      <TouchableOpacity
+        disabled={!isCodeComplete || isLoading}
+        onPress={async () => {
+          if (isCodeComplete && authToken) {
+            const otp_code = code.join('');
+            const success = await verifyNewPhone(phoneNumber, otp_code, authToken);
+            if (success) {
+              router.push('/(tabs)/More'); 
             }
-          }}
-          className={`
-            py-4 rounded-xl items-center
-            ${isCodeComplete ? 'bg-orange-500' : 'bg-orange-300'}
-          `}
-        >
-          <Text className="text-white text-lg font-semibold">
+          }
+        }}
+        style={{
+          paddingVertical: 16,
+          borderRadius: 12,
+          alignItems: 'center',
+          backgroundColor: (isCodeComplete && !isLoading) ? '#F97316' : '#FDBA74',
+          opacity: (isCodeComplete && !isLoading) ? 1 : 0.7,
+        }}
+      >
+        {isLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={{ color: '#fff', fontSize: 18, fontWeight: '600' }}>
             Continue
           </Text>
-        </TouchableOpacity>
-      </View>
+        )}
+      </TouchableOpacity>
+    </View>
 
     </SafeAreaView>
   );

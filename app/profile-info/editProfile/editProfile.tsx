@@ -8,11 +8,14 @@ import {
   SafeAreaView,
   StatusBar,
   Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
 import { AppText as Text } from "@/src/components/AppText";
 import { useTranslation } from "@/src/hooks/useTranslation";
+import { useAuth } from '@/src/hooks/useAuth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,8 +27,28 @@ const moderateScale = (size: number, factor: number = 0.5): number =>
 
 export default function EditProfile() {
   const { t, isRTL } = useTranslation();
-  const [fullName, setFullName] = useState<string>('Abdullah Al Zubaer');
-  const [email, setEmail] = useState<string>('email@example.com');
+  const { user, updateProfile, isLoading } = useAuth();
+
+  const [fullName, setFullName] = useState<string>(user?.full_name || '');
+  const [username, setUsername] = useState<string>(user?.username || '');
+  const [email, setEmail] = useState<string>(user?.email || '');
+
+  const handleSave = async () => {
+    if (!fullName.trim()) {
+      Alert.alert('Error', 'Full name is required');
+      return;
+    }
+
+    const success = await updateProfile({
+      full_name: fullName,
+      username: username || fullName.split(' ')[0], // Default username if empty
+      email: email,
+    });
+
+    if (success) {
+      router.back();
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -43,7 +66,7 @@ export default function EditProfile() {
       <View style={styles.profilePicContainer}>
         <Image
           source={{
-            uri: 'https://i.pravatar.cc/300',
+            uri: user?.avatar || 'https://i.pravatar.cc/300',
           }}
           style={styles.profileImage}
         />
@@ -65,13 +88,24 @@ export default function EditProfile() {
           />
         </View>
 
+        {/* Username */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>{t('username') || 'Username'}</Text>
+          <TextInput
+            style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
+            value={username}
+            onChangeText={setUsername}
+            placeholder={t('username') || 'Username'}
+            autoCapitalize="none"
+          />
+        </View>
+
         {/* Phone Number */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>{t('phoneNumberTitle')}</Text>
           <View style={styles.phoneContainer}>
             <View style={styles.countryCode}>
-              <Text style={styles.flag}>🇸🇦</Text>
-              <Text style={styles.code}>+966</Text>
+              <Text style={styles.code}>{user?.phone || '+966'}</Text>
             </View>
             <Link href="/profile-info/currentPhoneNumber/currentPhoneNumber" asChild>
               <TouchableOpacity>
@@ -95,8 +129,16 @@ export default function EditProfile() {
         </View>
 
         {/* Save Button */}
-        <TouchableOpacity style={styles.saveButton}>
-          <Text bold style={styles.saveButtonText}>{t('save')}</Text>
+        <TouchableOpacity 
+          style={[styles.saveButton, isLoading && styles.saveButtonDisabled]} 
+          onPress={handleSave}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text bold style={styles.saveButtonText}>{t('save')}</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -210,5 +252,8 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: moderateScale(17),
     fontWeight: 'bold',
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#ffba80',
   },
 });

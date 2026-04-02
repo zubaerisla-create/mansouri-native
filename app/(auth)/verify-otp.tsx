@@ -9,9 +9,11 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator } from 'react-native';
 import { AppText as Text } from "@/src/components/AppText";
+import { useAuth } from '@/src/hooks/useAuth';
 import { useTranslation } from "@/src/hooks/useTranslation";
 
 const CELL_COUNT = 6;
@@ -25,7 +27,9 @@ const responsiveSize = (size: number) => {
 
 export default function VerifyOtpScreen() {
   const router = useRouter();
+  const { phoneNumber, formattedPhoneNumber } = useLocalSearchParams<{ phoneNumber: string, formattedPhoneNumber: string }>();
   const { t, isRTL } = useTranslation();
+  const { otpLogin, isLoading } = useAuth();
   const [code, setCode] = useState<string[]>(Array(CELL_COUNT).fill(''));
   const [timeLeft, setTimeLeft] = useState(54);
   const inputs = useRef<TextInput[]>([]);
@@ -111,7 +115,7 @@ export default function VerifyOtpScreen() {
           }}
           className="text-gray-600 text-center"
         >
-          {t('codeSentTo')} +966565137895
+          {t('codeSentTo')} {formattedPhoneNumber || phoneNumber || '+96656XXXXXXX'}
         </Text>
 
         {/* OTP Inputs - Responsive spacing */}
@@ -180,26 +184,33 @@ export default function VerifyOtpScreen() {
         }}
       >
         <TouchableOpacity
-          disabled={!isCodeComplete}
-          onPress={() => {
+          disabled={!isCodeComplete || isLoading}
+          onPress={async () => {
             if (isCodeComplete) {
-              console.log('OTP Entered:', code.join(''));
-              router.push('/(tabs)/home');
+              const otp_code = code.join('');
+              const success = await otpLogin(phoneNumber, otp_code);
+              if (success) {
+                router.push('/home');
+              }
             }
           }}
           style={{
             paddingVertical: responsiveSize(16),
             borderRadius: responsiveSize(12),
-            opacity: isCodeComplete ? 1 : 0.7,
+            opacity: (isCodeComplete && !isLoading) ? 1 : 0.7,
           }}
-          className={`items-center ${isCodeComplete ? 'bg-orange-500' : 'bg-orange-300'}`}
+          className={`items-center ${isCodeComplete && !isLoading ? 'bg-orange-500' : 'bg-orange-300'}`}
         >
-          <Text 
-            style={{ fontSize: responsiveSize(16) }}
-            className="text-white font-semibold"
-          >
-            {t('continue')}
-          </Text>
+          {isLoading ? (
+            <ActivityIndicator color="#white" />
+          ) : (
+            <Text 
+              style={{ fontSize: responsiveSize(16) }}
+              className="text-white font-semibold"
+            >
+              {t('continue')}
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

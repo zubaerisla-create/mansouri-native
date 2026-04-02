@@ -13,9 +13,9 @@ export default class _layout extends Component {
           name="home"
           options={{ headerShown: false }}
         ></Tabs.Screen>
-        <Tabs.Screen name="Orders" options={{ title: "Orders" }}></Tabs.Screen>
+        <Tabs.Screen name="Order" options={{ title: "Orders" }}></Tabs.Screen>
         <Tabs.Screen
-          name="Favorite"
+          name="Favourite"
           options={{ title: "Favorites" }}
         ></Tabs.Screen>
         <Tabs.Screen name="More" options={{ title: "More" }}></Tabs.Screen>

@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ChevronDown, X, Search, Phone, AlertCircle, CheckCircle2 } from 'lucide-react-native';
+import { useAuth } from '@/src/hooks/useAuth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ function formatDisplay(digits: string, countryCode: string): string {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export default function PhoneNumberScreen() {
+export default function AuthPhoneNumberScreen() {
   const [phoneDigits, setPhoneDigits]         = useState('');
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
   const [modalVisible, setModalVisible]       = useState(false);
@@ -101,6 +102,7 @@ export default function PhoneNumberScreen() {
   const inputRef   = useRef<TextInput>(null);
   const router     = useRouter();
   const { height } = useWindowDimensions();
+  const { sendOTP } = useAuth();
 
   const isSmall = height < 680;
   const scale   = isSmall ? 0.88 : height > 850 ? 1.06 : 1;
@@ -155,19 +157,22 @@ export default function PhoneNumberScreen() {
 
     try {
       setIsSubmitting(true);
-      // 🔁 Replace with your real OTP API call
-      await new Promise<void>(resolve => setTimeout(resolve, 1200));
+      
+      const fullPhone = `${selectedCountry.dialCode}${phoneDigits}`;
+      const success = await sendOTP(fullPhone, 'login');
 
-      const formatted = formatDisplay(phoneDigits, selectedCountry.code);
-      router.push({
-        pathname: '/(auth)/verify-otp',
-        params: {
-          phoneNumber:          `${selectedCountry.dialCode}${phoneDigits}`,
-          formattedPhoneNumber: `${selectedCountry.dialCode} ${formatted}`,
-          countryCode:          selectedCountry.code,
-        },
-      });
-    } catch {
+      if (success) {
+        const formatted = formatDisplay(phoneDigits, selectedCountry.code);
+        router.push({
+          pathname: '/(auth)/verify-otp',
+          params: {
+            phoneNumber:          fullPhone,
+            formattedPhoneNumber: `${selectedCountry.dialCode} ${formatted}`,
+            countryCode:          selectedCountry.code,
+          },
+        });
+      }
+    } catch (error) {
       Alert.alert('Error', 'Failed to send verification code. Please try again.');
     } finally {
       setIsSubmitting(false);

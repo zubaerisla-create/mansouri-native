@@ -14,8 +14,16 @@ import {
 import { AppText as Text } from "@/src/components/AppText";
 import { useTranslation } from "@/src/hooks/useTranslation";
 
+import { useAuth } from "@/src/hooks/useAuth";
+import { useEffect } from "react";
+
 export default function ProfileScreen() {
   const { t, language, toggleLanguage, isRTL } = useTranslation();
+  const { user, getProfile, logout } = useAuth();
+
+  useEffect(() => {
+    getProfile();
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -24,11 +32,11 @@ export default function ProfileScreen() {
         <View style={styles.userCard}>
           {/* Avatar Image */}
           <Image
-            source={{ uri: "https://shorturl.at/ZpXL2" }}
+            source={{ uri: user?.avatar || "https://shorturl.at/ZpXL2" }}
             style={styles.avatar}
           />
 
-          <Text style={styles.userName}>Abdullah Al Zubaer</Text>
+          <Text style={styles.userName}>{user?.full_name || t('guest')}</Text>
 
           <View style={styles.peepeBalanceRow}>
             <Text style={styles.peepeLabel}>{t('peepeBalance')}</Text>
@@ -205,17 +213,15 @@ export default function ProfileScreen() {
 
         {/* Logout */}
 
-        <Link href="/(auth)/phone-number" asChild>
-          <TouchableOpacity style={styles.logoutBtn}>
-            <Ionicons
-              name="log-out-outline"
-              size={20}
-              color="white"
-              style={styles.logoutIcon}
-            />
-            <Text bold style={styles.logoutText}>{t('logout')}</Text>
-          </TouchableOpacity>
-        </Link>
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => logout()}>
+          <Ionicons
+            name="log-out-outline"
+            size={20}
+            color="white"
+            style={styles.logoutIcon}
+          />
+          <Text bold style={styles.logoutText}>{t('logout')}</Text>
+        </TouchableOpacity>
 
         <Text style={styles.version}>{t('version')}</Text>
       </ScrollView>
