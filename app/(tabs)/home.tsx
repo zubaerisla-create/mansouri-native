@@ -1,14 +1,16 @@
 import Header from "@/src/components/Home/HomePageHeader/Header";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     FlatList,
     Image,
     ScrollView,
     TouchableOpacity,
     View,
+    ActivityIndicator,
 } from "react-native";
+import api from "@/src/services/api";
 import { AppText as Text } from "@/src/components/AppText";
 import { useTranslation } from "@/src/hooks/useTranslation";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -20,95 +22,66 @@ const categories = [
   { id: "4", name: "Asian", icon: "🍜" },
 ];
 
-const nearbyRestaurants = [
-  {
-    id: "1",
-    name: "Burger House",
-    cuisine: "Burgers",
-    rating: 4.5,
-    deliveryTime: "25",
-    minOrder: "25 SAR",
-    distance: "0.8 km",
-    discount: "20% off first order",
-    image:
-      "https://shorturl.at/RnOWh",
-  },
-  {
-    id: "2",
-    name: "Shawarma Express",
-    cuisine: "Shawarma",
-    rating: 4.7,
-    deliveryTime: "20",
-    minOrder: "20 SAR",
-    distance: "1.2 km",
-    discount: "",
-    image:
-      "https://shorturl.at/p1glq",
-  },
-  {
-    id: "3",
-    name: "Pizza Palace",
-    cuisine: "Pizza",
-    rating: 4.7,
-    deliveryTime: "20",
-    minOrder: "20 SAR",
-    distance: "1.2 km",
-    discount: "15% off",
-    image:
-      "https://images.unsplash.com/photo-1562967916-eb82221dfb92?w=800&auto=format&fit=crop",
-  },
-  {
-    id: "4",
-    name: "Asian Delight",
-    cuisine: "Asian",
-    rating: 4.3,
-    deliveryTime: "30",
-    minOrder: "30 SAR",
-    distance: "1.5 km",
-    discount: "",
-    image:
-      "https://images.unsplash.com/photo-1562967916-eb82221dfb92?w=800&auto=format&fit=crop",
-  },
-];
-
 export default function HomeScreen() {
-  const [filteredRestaurants, setFilteredRestaurants] =
-    useState(nearbyRestaurants);
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [meta, setMeta] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
   const router = useRouter();
   const { t } = useTranslation();
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchText);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
+  // Fetch from API
+  useEffect(() => {
+    fetchRestaurants(debouncedSearch);
+  }, [debouncedSearch]);
+
+  const fetchRestaurants = async (query: string) => {
+    try {
+      setLoading(true);
+      setError("");
+      const res = await api.searchRestaurants(query);
+      setRestaurants(res?.data || []);
+      setMeta(res?.meta || null);
+    } catch (err: any) {
+      setError(err?.message || "Failed to fetch restaurants");
+      setRestaurants([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSearch = (text: string) => {
     setSearchText(text);
-    applyFilters(text, selectedCategory);
   };
 
   const handleCategory = (category: string) => {
     const newCategory = selectedCategory === category ? "" : category;
     setSelectedCategory(newCategory);
-    applyFilters(searchText, newCategory);
   };
 
-  const applyFilters = (search: string, category: string) => {
-    let list = nearbyRestaurants;
-
-    if (search.trim() !== "") {
-      const q = search.toLowerCase().trim();
-      list = list.filter(
-        (item) =>
-          item.name.toLowerCase().includes(q) ||
-          item.cuisine.toLowerCase().includes(q),
-      );
-    }
-
-    if (category !== "") {
-      const cat = category.toLowerCase();
-      list = list.filter((item) => item.cuisine.toLowerCase().includes(cat));
-    }
-
-    setFilteredRestaurants(list);
+  const getFilteredRestaurants = () => {
+    if (!selectedCategory) return restaurants;
+    const cat = selectedCategory.toLowerCase();
+    return restaurants.filter((item) => 
+      item?.category_name?.toLowerCase().includes(cat) ||
+      item?.cuisine?.toLowerCase().includes(cat)
+    );
   };
+
+  const filteredRestaurants = getFilteredRestaurants();
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -154,14 +127,28 @@ export default function HomeScreen() {
             <Feather name="map-pin" size={20} color="#4169E1" />
           </View>
 
-          {filteredRestaurants.length === 0 ? (
+          {meta?.total !== undefined && (
+            <Text className="text-sm text-gray-500 mb-2">
+              {meta.total} {t('results found')} {meta.page && meta.total_pages ? `(Page ${meta.page} of ${meta.total_pages})` : ''}
+            </Text>
+          )}
+
+          {loading ? (
+            <View className="py-8">
+               <ActivityIndicator size="large" color="#FF5101" />
+            </View>
+          ) : error ? (
+            <Text className="text-center text-red-500 mt-8 text-base">
+              {error}
+            </Text>
+          ) : filteredRestaurants.length === 0 ? (
             <Text className="text-center text-gray-500 mt-8 text-base">
               {t('noResult')}
             </Text>
           ) : (
             <FlatList
               data={filteredRestaurants}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item) => item.id?.toString() || item.uuid || Math.random().toString()}
               scrollEnabled={false}
               ItemSeparatorComponent={() => <View className="h-4" />}
               renderItem={({ item }) => (
@@ -169,7 +156,7 @@ export default function HomeScreen() {
                   onPress={() => {
                     router.push({
                       pathname: "/restaurant/[id]",
-                      params: { id: item.id },
+                      params: { id: item.id || item.uuid },
                     });
                   }}
                   activeOpacity={0.9}
@@ -179,7 +166,7 @@ export default function HomeScreen() {
                     {/* Image on the left side */}
                     <View className="w-28 rounded-full">
                       <Image
-                        source={{ uri: item.image }}
+                        source={{ uri: item.logo || "https://placehold.co/150x150/png" }}
                         className="w-full h-28 rounded-xl"
                         resizeMode="cover"
                       />
@@ -187,11 +174,11 @@ export default function HomeScreen() {
 
                     {/* Details on the right side */}
                     <View className="flex-1 ">
-                      <Text className="text-lg font-bold text-black">
-                        {item.name}
+                      <Text className="text-lg font-bold text-black" numberOfLines={1}>
+                        {item.brand_name || item.name}
                       </Text>
-                      <Text className="text-sm text-gray-600 mt-1">
-                        {item.cuisine}
+                      <Text className="text-sm text-gray-600 mt-1" numberOfLines={2}>
+                        {item.short_description || item.category_name}
                       </Text>
 
                       {item.discount ? (
@@ -202,43 +189,29 @@ export default function HomeScreen() {
                         </View>
                       ) : null}
 
-
-<View className="flex-row gap-4 items-center mt-3" >
-  
-                      <View className="flex-row items-center">
-
+                      <View className="flex-row gap-4 items-center mt-3" >
                         <View className="flex-row items-center">
-                          <Feather name="star" size={16} color="#FFD700" />
-                          <Text className="ms-1 text-sm text-gray-800">
-                            {item.rating}
-                          </Text>
+                          <View className="flex-row items-center">
+                            <Feather name="star" size={16} color="#FFD700" />
+                            <Text className="ms-1 text-sm text-gray-800">
+                              {item.rating || "4.0"}
+                            </Text>
+                          </View>
                         </View>
-                     
-                      </View>
 
-                 <View className="flex-row items-center gap-4" >
-                       <View className="flex-row items-center ">
-                        <Feather name="map-pin" size={14} color="#666" />
-                        <Text className="ms-1 text-xs text-gray-500">
-                          {item.distance}
-                        </Text>
+                        <View className="flex-row items-center gap-4" >
+                          <View className="flex-row items-center ">
+                            <Feather name="map-pin" size={14} color="#666" />
+                            <Text className="ms-1 text-xs text-gray-500" numberOfLines={1} style={{maxWidth: 100}}>
+                              {item.city ? `${item.city}, ${item.short_address || ''}` : (item.distance || "N/A")}
+                            </Text>
+                          </View>
+                        </View>
                       </View>
-
-                      <Text className=" text-sm text-gray-600">
-                        {t('minOrder')}{item.minOrder}
-                      </Text>
-                 </View>
-</View>
-                      
                     </View>
-
                   </View>
 
-<Text className="border-1 bg-gray-100 h-1 mt-4" ></Text>
-
-
-
-
+                  <Text className="border-t-2 border-gray-100 h-1 mt-4" ></Text>
                 </TouchableOpacity>
               )}
             />

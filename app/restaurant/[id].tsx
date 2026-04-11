@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import api from "@/src/services/api";
 
 // Type Definitions
 interface RestaurantItem {
@@ -43,208 +44,6 @@ interface Restaurant {
   image: string;
   items: RestaurantItem[];
 }
-
-// Demo Data with more items
-const restaurantData: Record<string, Restaurant> = {
-  "1": {
-    id: "1",
-    name: "Burger House",
-    cuisine: "Burgers",
-    rating: 4.5,
-    deliveryTime: "20",
-    minOrder: "25 SAR",
-    distance: "1.2 km",
-    hours: "10:00 AM - 11:00 PM",
-    discount: "20% off first order",
-    image:
-      "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop",
-    items: [
-      {
-        id: "1",
-        name: "Classic Burger",
-        description: "Juicy beef patty with lettuce, tomato, and special sauce",
-        calories: 650,
-        price: "28 SAR",
-        image:
-          "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&auto=format&fit=crop",
-        category: "main",
-        hasOffer: true,
-      },
-      {
-        id: "2",
-        name: "Cheese Burger",
-        description: "Beef patty with melted cheese and special sauce",
-        calories: 720,
-        price: "32 SAR",
-        image:
-          "https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=400&auto=format&fit=crop",
-        category: "main",
-      },
-      {
-        id: "3",
-        name: "Chicken Burger",
-        description: "Grilled chicken breast with mayo and veggies",
-        calories: 580,
-        price: "30 SAR",
-        image:
-          "https://images.unsplash.com/photo-1626082895612-9e6d8e8c2b1c?w=400&auto=format&fit=crop",
-        category: "main",
-        hasOffer: true,
-      },
-      {
-        id: "4",
-        name: "Double Burger",
-        description: "Two beef patties with double cheese",
-        calories: 850,
-        price: "45 SAR",
-        image:
-          "https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&auto=format&fit=crop",
-        category: "main",
-      },
-      {
-        id: "5",
-        name: "French Fries",
-        description: "Crispy golden fries with ketchup",
-        calories: 320,
-        price: "12 SAR",
-        image:
-          "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=400&auto=format&fit=crop",
-        category: "sides",
-      },
-      {
-        id: "6",
-        name: "Onion Rings",
-        description: "Crispy battered onion rings",
-        calories: 280,
-        price: "15 SAR",
-        image:
-          "https://images.unsplash.com/photo-1639024471286-43a34c300c6c?w=400&auto=format&fit=crop",
-        category: "sides",
-        hasOffer: true,
-      },
-      {
-        id: "7",
-        name: "Mozzarella Sticks",
-        description: "Fried mozzarella cheese sticks with marinara",
-        calories: 350,
-        price: "18 SAR",
-        image:
-          "https://images.unsplash.com/photo-1632773681328-04ee959544a0?w=400&auto=format&fit=crop",
-        category: "sides",
-      },
-      {
-        id: "8",
-        name: "Chicken Nuggets",
-        description: "Crispy chicken nuggets with honey mustard",
-        calories: 400,
-        price: "20 SAR",
-        image:
-          "https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=400&auto=format&fit=crop",
-        category: "sides",
-      },
-      {
-        id: "9",
-        name: "Veggie Burger",
-        description: "Plant-based patty with fresh vegetables",
-        calories: 420,
-        price: "35 SAR",
-        image:
-          "https://images.unsplash.com/photo-1559314809-2b99056a8c4a?w=400&auto=format&fit=crop",
-        category: "main",
-        hasOffer: true,
-      },
-      {
-        id: "10",
-        name: "BBQ Burger",
-        description: "Beef patty with BBQ sauce and onion rings",
-        calories: 780,
-        price: "38 SAR",
-        image:
-          "https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=400&auto=format&fit=crop",
-        category: "main",
-      },
-      {
-        id: "11",
-        name: "Coleslaw",
-        description: "Fresh cabbage and carrot salad",
-        calories: 150,
-        price: "10 SAR",
-        image:
-          "https://images.unsplash.com/photo-1626803775023-c64f3a8d9247?w=400&auto=format&fit=crop",
-        category: "sides",
-      },
-      {
-        id: "12",
-        name: "Garlic Bread",
-        description: "Toasted bread with garlic butter",
-        calories: 220,
-        price: "14 SAR",
-        image:
-          "https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?w=400&auto=format&fit=crop",
-        category: "sides",
-        hasOffer: true,
-      },
-    ],
-  },
-  "2": {
-    id: "2",
-    name: "Pizza Palace",
-    cuisine: "Italian",
-    rating: 4.7,
-    deliveryTime: "30",
-    minOrder: "30 SAR",
-    distance: "2.5 km",
-    hours: "11:00 AM - 12:00 PM",
-    discount: "15% off on orders above 50 SAR",
-    image:
-      "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&auto=format&fit=crop",
-    items: [
-      {
-        id: "1",
-        name: "Margherita Pizza",
-        description: "Classic tomato sauce, mozzarella, and basil",
-        calories: 800,
-        price: "35 SAR",
-        image:
-          "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&auto=format&fit=crop",
-        category: "main",
-        hasOffer: true,
-      },
-      {
-        id: "2",
-        name: "Pepperoni Pizza",
-        description: "Tomato sauce, mozzarella, and pepperoni",
-        calories: 950,
-        price: "40 SAR",
-        image:
-          "https://images.unsplash.com/photo-1620374645498-af6bd681a0bd?w=400&auto=format&fit=crop",
-        category: "main",
-      },
-      {
-        id: "3",
-        name: "Garlic Breadsticks",
-        description: "Freshly baked breadsticks with garlic butter",
-        calories: 300,
-        price: "15 SAR",
-        image:
-          "https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?w=400&auto=format&fit=crop",
-        category: "sides",
-        hasOffer: true,
-      },
-      {
-        id: "4",
-        name: "Caesar Salad",
-        description: "Fresh romaine lettuce with Caesar dressing",
-        calories: 250,
-        price: "25 SAR",
-        image:
-          "https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400&auto=format&fit=crop",
-        category: "sides",
-      },
-    ],
-  },
-};
-
 type FilterType = "All" | "Offer" | "Main" | "Sides";
 type ViewMode = "list" | "grid";
 
@@ -273,22 +72,37 @@ export default function RestaurantDetail() {
 
   // Load restaurant data
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const foundRestaurant = restaurantData[id as string];
-      if (foundRestaurant) {
-        setRestaurant(foundRestaurant);
-        // Initialize with all items
-        setFilteredItems(foundRestaurant.items);
-        // Show first page
-        setDisplayedItems(foundRestaurant.items.slice(0, itemsPerPage));
-        setIsRestaurantFavorite(isFavorite(foundRestaurant.id));
-      } else {
-        setRestaurant(null);
-      }
-      setLoading(false);
-    }, 500);
+    const fetchRestaurantData = async () => {
+      try {
+        setLoading(true);
+        const res = await api.getRestaurant(id as string);
+        const foundRestaurant = res?.data || res; // handle potential nesting
+        if (foundRestaurant) {
+          // Normalize API properties if needed
+          const formattedRestaurant = {
+            ...foundRestaurant,
+            name: foundRestaurant.brand_name || foundRestaurant.name,
+            cuisine: foundRestaurant.short_description || foundRestaurant.cuisine || foundRestaurant.category_name,
+            image: foundRestaurant.logo || foundRestaurant.image,
+            items: foundRestaurant.items || [],
+          };
 
-    return () => clearTimeout(timer);
+          setRestaurant(formattedRestaurant);
+          setFilteredItems(formattedRestaurant.items);
+          setDisplayedItems(formattedRestaurant.items.slice(0, itemsPerPage));
+          setIsRestaurantFavorite(isFavorite(formattedRestaurant.id || id as string));
+        } else {
+          setRestaurant(null);
+        }
+      } catch (err) {
+        console.error("Error fetching restaurant:", err);
+        setRestaurant(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRestaurantData();
   }, [id, isFavorite]);
 
   // Apply filters & search
@@ -302,7 +116,7 @@ export default function RestaurantDetail() {
       items = items.filter((item) => item.hasOffer);
     } else if (activeFilter === "Main") {
       items = items.filter((item) => item.category === "main");
-    } else if (activeFilter === "Sides") {
+    } else if (activeFilter === "Sides") { 
       items = items.filter((item) => item.category === "sides");
     }
 
@@ -439,7 +253,7 @@ export default function RestaurantDetail() {
 
             <View className="flex-row items-center justify-between">
               <Text className="text-base font-bold text-orange-500">
-                {item.price}
+                {item.price?.toString().includes('SAR') ? item.price : `${item.price || 0} SAR`}
               </Text>
             </View>
           </View>
@@ -481,7 +295,7 @@ export default function RestaurantDetail() {
           </Text>
           <View className="flex-row items-center justify-between mt-2">
             <Text className="text-base font-bold text-gray-900">
-              {item.price}
+              {item.price?.toString().includes('SAR') ? item.price : `${item.price || 0} SAR`}
             </Text>
           </View>
         </View>

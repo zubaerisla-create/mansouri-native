@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useCart } from '@/src/context/CartContext';
+import api from '@/src/services/api';
 
 // টাইপ ডেফিনিশন
 interface RestaurantItem {
@@ -37,110 +38,6 @@ interface Restaurant {
   items: RestaurantItem[];
 }
 
-// ডেমো ডেটা
-const restaurantData: Record<string, Restaurant> = {
-  '1': {
-    name: 'Burger House',
-    cuisine: 'Burgers',
-    rating: 4.5,
-    deliveryTime: '20',
-    minOrder: '25 SAR',
-    distance: '1.2 km',
-    hours: '10:00 AM - 11:00 PM',
-    discount: '20% off first order',
-    image:
-      'https://shorturl.at/RnOWh',
-    items: [
-      {
-        id: '1',
-        name: 'Classic Burger',
-        description: 'Juicy beef patty with lettuce, tomato, and special sauce',
-        calories: 650,
-        price: '28 SAR',
-        image:
-          'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&auto=format&fit=crop',
-        category: 'main',
-        hasOffer: true,
-      },
-      {
-        id: '2',
-        name: 'Chicken Burger',
-        description: 'Crispy chicken breast with mayo and coleslaw',
-        calories: 550,
-        price: '28 SAR',
-        image:
-          'https://images.unsplash.com/photo-1562967916-eb82221dfb92?w=400&auto=format&fit=crop',
-        category: 'main',
-        hasOffer: true,
-      },
-      {
-        id: '3',
-        name: 'Fries',
-        description: 'Crispy golden fries',
-        calories: 350,
-        price: '12 SAR',
-        image:
-          'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=400&auto=format&fit=crop',
-        category: 'sides',
-      },
-      {
-        id: '4',
-        name: 'Cheese Burger',
-        description: 'Double cheese with premium beef',
-        calories: 720,
-        price: '32 SAR',
-        image:
-          'https://images.unsplash.com/photo-1586190848861-99aa4a171e90?w=400&auto=format&fit=crop',
-        category: 'main',
-      },
-      {
-        id: '5',
-        name: 'Onion Rings',
-        description: 'Crispy golden onion rings',
-        calories: 320,
-        price: '15 SAR',
-        image:
-          'https://images.unsplash.com/photo-1639024471283-03518883512d?w=400&auto=format&fit=crop',
-        category: 'sides',
-      },
-    ],
-  },
-  '2': {
-    name: 'Pizza Palace',
-    cuisine: 'Italian',
-    rating: 4.7,
-    deliveryTime: '30',
-    minOrder: '30 SAR',
-    distance: '2.5 km',
-    hours: '11:00 AM - 12:00 PM',
-    discount: '15% off on orders above 50 SAR',
-    image:
-      'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&auto=format&fit=crop',
-    items: [
-      {
-        id: '1',
-        name: 'Margherita Pizza',
-        description: 'Classic tomato, mozzarella and basil',
-        calories: 850,
-        price: '35 SAR',
-        image:
-          'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=400&auto=format&fit=crop',
-        category: 'main',
-        hasOffer: true,
-      },
-      {
-        id: '2',
-        name: 'Pepperoni Pizza',
-        description: 'Spicy pepperoni with extra cheese',
-        calories: 920,
-        price: '42 SAR',
-        image:
-          'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=400&auto=format&fit=crop',
-        category: 'main',
-      },
-    ],
-  },
-};
 
 type SpicyLevel = 'None' | 'Hot' | 'Extra Hot';
 
@@ -173,33 +70,55 @@ export default function ItemDetail() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Looking for restaurant:', restaurantId, 'item:', itemId);
-    
-    const timer = setTimeout(() => {
-      const foundRestaurant = restaurantData[restaurantId];
-      
-      console.log('Found restaurant:', foundRestaurant);
-      
-      if (foundRestaurant) {
-        setRestaurant(foundRestaurant);
+    const fetchItemDetails = async () => {
+      try {
+        setLoading(true);
+        console.log('Looking for restaurant:', restaurantId, 'item:', itemId);
+
+        const res = await api.getRestaurant(restaurantId as string);
+        const foundRestaurant = res?.data || res;
         
-        // আইটেম খুঁজে বের করা
-        const foundItem = foundRestaurant.items.find(i => i.id === itemId);
-        console.log('Found item:', foundItem);
-        
-        if (foundItem) {
-          setItem(foundItem);
-        } else {
-          // আইটেম না পেলে প্রথম আইটেমটি দেখানো
-          if (foundRestaurant.items.length > 0) {
-            setItem(foundRestaurant.items[0]);
+        if (foundRestaurant) {
+          const formattedRestaurant = {
+            ...foundRestaurant,
+            name: foundRestaurant.brand_name || foundRestaurant.name,
+            cuisine: foundRestaurant.short_description || foundRestaurant.cuisine || foundRestaurant.category_name,
+            image: foundRestaurant.logo || foundRestaurant.image,
+            items: foundRestaurant.items || [],
+          };
+          setRestaurant(formattedRestaurant);
+          
+          let foundItem = formattedRestaurant.items?.find((i: any) => i.id?.toString() === itemId || i.uuid === itemId);
+          
+          if (!foundItem) {
+            try {
+               const itemRes = await api.getRestaurantItem(itemId as string);
+               foundItem = itemRes?.data || itemRes;
+            } catch (err) {
+               console.log("Could not fetch individual item", err);
+            }
+          }
+
+          if (foundItem) {
+            setItem({
+               ...foundItem,
+               name: foundItem.brand_name || foundItem.name,
+               description: foundItem.short_description || foundItem.description,
+               image: foundItem.logo || foundItem.image,
+            });
+          } else if (formattedRestaurant.items?.length > 0) {
+            // fallback to first item
+            setItem(formattedRestaurant.items[0]);
           }
         }
+      } catch (err) {
+        console.error("Error fetching item resources:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    }, 300);
+    };
 
-    return () => clearTimeout(timer);
+    fetchItemDetails();
   }, [restaurantId, itemId]);
 
   // Calculate total price
@@ -207,13 +126,8 @@ export default function ItemDetail() {
     if (!item) return 0;
     
     // SAR রিমুভ করা
-    const priceStr = item.price.replace(' SAR', '').trim();
-    const basePrice = parseFloat(priceStr);
-    
-    if (isNaN(basePrice)) {
-      console.error('Invalid price format:', item.price);
-      return 0;
-    }
+    const priceStr = item.price?.toString().replace(' SAR', '').trim() || '0';
+    const basePrice = parseFloat(priceStr) || 0;
     
     let total = basePrice;
     
@@ -238,7 +152,7 @@ export default function ItemDetail() {
   const handleAddToCart = () => {
     if (!item || !restaurant) return;
 
-    const priceStr = item.price.replace(' SAR', '').trim();
+    const priceStr = item.price?.toString().replace(' SAR', '').trim() || '0';
     let finalPrice = parseFloat(priceStr) || 0;
 
     if (size === 'Large') finalPrice += 5;

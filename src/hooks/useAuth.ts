@@ -42,7 +42,7 @@ export const useAuth = () => {
 
   const handleUpdateProfile = async (data: { full_name?: string; username?: string; email?: string }) => {
     setLoading(true);
-    const result = await dispatch(updateProfile(data));
+    const result = await dispatch(updateProfile(data)); 
     setLoading(false);
 
     if (updateProfile.fulfilled.match(result)) {

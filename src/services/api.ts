@@ -95,6 +95,30 @@ class ApiService {
     });
     return response.data;
   }
+
+  // Restaurant APIs
+  async searchRestaurants(query: string = '') {
+    const response = await this.api.get('/api/v1/restaurants/search/', {
+      params: { 
+        q: query,
+        user_lat: 23.7218,
+        user_lon: 90.4993
+      }
+    });
+    return response.data;
+  }
+
+  async getRestaurant(id: string) {
+    // Since there's no direct restaurant endpoint, we fetch search and find the restaurant
+    const response = await this.searchRestaurants();
+    const restaurants = response?.data || [];
+    return restaurants.find((r: any) => r.id?.toString() === id || r.uuid === id) || null;
+  }
+
+  async getRestaurantItem(itemId: string) {
+    // Items are handled locally after getting the restaurant
+    throw new Error('Individual item fetching is not supported on this endpoint configuration.');
+  }
 }
 
 export default new ApiService();
