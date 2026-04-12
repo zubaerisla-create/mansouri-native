@@ -10,6 +10,9 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, router } from 'expo-router';
@@ -54,93 +57,104 @@ export default function EditProfile() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={scale(28)} color="#000" />
-        </TouchableOpacity>
-        <Text bold style={styles.headerTitle}>{t('editProfile')}</Text>
-      </View>
-
-      {/* Profile Picture + Edit Button */}
-      <View style={styles.profilePicContainer}>
-        <Image
-          source={{
-            uri: user?.avatar || 'https://i.pravatar.cc/300',
-          }}
-          style={styles.profileImage}
-        />
-        <TouchableOpacity style={styles.editAvatarButton}>
-          <Ionicons name="pencil" size={scale(18)} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Form Fields */}
-      <View style={styles.form}>
-        {/* Full Name */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>{t('fullName')}</Text>
-          <TextInput
-            style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder={t('fullName')}
-          />
-        </View>
-
-        {/* Username */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>{t('username') || 'Username'}</Text>
-          <TextInput
-            style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
-            value={username}
-            onChangeText={setUsername}
-            placeholder={t('username') || 'Username'}
-            autoCapitalize="none"
-          />
-        </View>
-
-        {/* Phone Number */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>{t('phoneNumberTitle')}</Text>
-          <View style={styles.phoneContainer}>
-            <View style={styles.countryCode}>
-              <Text style={styles.code}>{user?.phone || '+966'}</Text>
-            </View>
-            <Link href="/profile-info/currentPhoneNumber/currentPhoneNumber" asChild>
-              <TouchableOpacity>
-                <Text style={styles.changeText}>{t('change')}</Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
-        </View>
-
-        {/* Email (optional) */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>{t('emailOptional')}</Text>
-          <TextInput
-            style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="email@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        {/* Save Button */}
-        <TouchableOpacity 
-          style={[styles.saveButton, isLoading && styles.saveButtonDisabled]} 
-          onPress={handleSave}
-          disabled={isLoading}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text bold style={styles.saveButtonText}>{t('save')}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          {/* Header */}
+          <View className='pt-12' style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Ionicons name={isRTL ? "arrow-forward" : "arrow-back"} size={scale(28)} color="#000" />
+            </TouchableOpacity>
+            <Text bold style={styles.headerTitle}>{t('editProfile')}</Text>
+          </View>
+
+          {/* Profile Picture + Edit Button */}
+          <View style={styles.profilePicContainer}>
+            <Image
+              source={{
+                uri: user?.avatar || 'https://i.pravatar.cc/300',
+              }}
+              style={styles.profileImage}
+            />
+            <TouchableOpacity style={styles.editAvatarButton}>
+              <Ionicons name="pencil" size={scale(18)} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Form Fields */}
+          <View style={styles.form}>
+            {/* Full Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('fullName')}</Text>
+              <TextInput
+                style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder={t('fullName')}
+              />
+            </View>
+
+            {/* Username */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('username') || 'Username'}</Text>
+              <TextInput
+                style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
+                value={username}
+                onChangeText={setUsername}
+                placeholder={t('username') || 'Username'}
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* Phone Number */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('phoneNumberTitle')}</Text>
+              <View style={styles.phoneContainer}>
+                <View style={styles.countryCode}>
+                  <Text style={styles.code}>{user?.phone || '+966'}</Text>
+                </View>
+                <Link href="/profile-info/currentPhoneNumber/currentPhoneNumber" asChild>
+                  <TouchableOpacity>
+                    <Text style={styles.changeText}>{t('change')}</Text>
+                  </TouchableOpacity>
+                </Link>
+              </View>
+            </View>
+
+            {/* Email (optional) */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>{t('emailOptional')}</Text>
+              <TextInput
+                style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="email@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* Save Button */}
+            <TouchableOpacity 
+              style={[styles.saveButton, isLoading && styles.saveButtonDisabled]} 
+              onPress={handleSave}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text bold style={styles.saveButtonText}>{t('save')}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -149,6 +163,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: verticalScale(40),
   },
   header: {
     flexDirection: 'row',

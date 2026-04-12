@@ -43,7 +43,7 @@ const HelpSupport = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View className="flex-row items-center px-4 py-3 bg-white border-b border-gray-200">
+        <View className="flex-row pt-12 items-center px-4 py-3 bg-white border-b border-gray-200">
           <TouchableOpacity 
             onPress={() => router.back()} 
             className="p-2"
