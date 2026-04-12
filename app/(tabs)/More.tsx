@@ -1,6 +1,6 @@
 // ProfileScreen.tsx
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import React from "react";
 import {
   Image,
