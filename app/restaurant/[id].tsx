@@ -227,7 +227,7 @@ export default function RestaurantDetail() {
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
-        ListHeaderComponent={() => (
+        ListHeaderComponent={
           <View className="px-4 mt-20 pb-4">
             {/* Restaurant Info Card */}
             <View className="bg-white rounded-2xl p-5 shadow-lg -mt-10 mb-6 border border-gray-100">
@@ -339,7 +339,7 @@ export default function RestaurantDetail() {
               </View>
             </ScrollView>
           </View>
-        )}
+        }
         renderItem={renderListItem}
         ListEmptyComponent={() => (
           <View className="py-10 items-center">
