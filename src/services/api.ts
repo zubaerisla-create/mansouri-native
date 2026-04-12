@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { AddToCartPayload, CartResponse, MenuResponse, UpdateCartPayload } from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -38,12 +39,46 @@ class ApiService {
           config.headers['ngrok-skip-browser-warning'] = 'true';
         }
 
+        // If _skipAuth is true, we remove the Authorization header for this request
+        if (config._skipAuth) {
+          if (config.headers?.delete) {
+            config.headers.delete('Authorization');
+            config.headers.delete('authorization');
+          }
+          if (config.headers) {
+            delete config.headers['Authorization'];
+            delete config.headers['authorization'];
+            delete config.headers.Authorization;
+          }
+        }
+
         console.log('API DEBUG:', config.method?.toUpperCase(), config.url);
-        console.log('AUTH HEADER:', config.headers.Authorization || config.headers['Authorization'] || 'NONE');
+        const authHeader = config.headers?.get ? config.headers.get('Authorization') : (config.headers?.Authorization || config.headers?.['Authorization']);
+        console.log('AUTH HEADER:', authHeader || 'NONE');
 
         return config;
       },
       (error) => {
+        return Promise.reject(error);
+      }
+    );
+
+    this.api.interceptors.response.use(
+      (response) => {
+        console.log('API RESPONSE:', response.status, response.config.url);
+        return response;
+      },
+      (error) => {
+        console.error('API ERROR:', {
+          url: error.config?.url,
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message
+        });
+
+        if (error.response?.status === 401) {
+          console.warn('Unauthorized request detected. Token might be invalid.');
+        }
         return Promise.reject(error);
       }
     );
@@ -54,7 +89,9 @@ class ApiService {
     const response = await this.api.post('/api/v1/customer/auth/otp/send/', {
       phone,
       purpose,
-    });
+    }, {
+      _skipAuth: true
+    } as any);
     return response.data;
   }
 
@@ -62,7 +99,9 @@ class ApiService {
     const response = await this.api.post('/api/v1/customer/auth/login/', {
       phone,
       otp_code,
-    });
+    }, {
+      _skipAuth: true
+    } as any);
     return response.data;
   }
 
@@ -99,12 +138,13 @@ class ApiService {
   // Restaurant APIs
   async searchRestaurants(query: string = '') {
     const response = await this.api.get('/api/v1/restaurants/search/', {
-      params: { 
+      params: {
         q: query,
         user_lat: 23.7218,
         user_lon: 90.4993
-      }
-    });
+      },
+      _skipAuth: true
+    } as any);
     return response.data;
   }
 
@@ -118,6 +158,33 @@ class ApiService {
   async getRestaurantItem(itemId: string) {
     // Items are handled locally after getting the restaurant
     throw new Error('Individual item fetching is not supported on this endpoint configuration.');
+  }
+
+  // --- New Menu & Cart APIs ---
+
+  async getRestaurantMenu(branchId: string): Promise<MenuResponse> {
+    const response = await this.api.get(`/api/v1/branch/${branchId}/menu/`);
+    return response.data;
+  }
+
+  async getCart(): Promise<CartResponse> {
+    const response = await this.api.get('/api/v1/cart/');
+    return response.data;
+  }
+
+  async addToCart(payload: AddToCartPayload): Promise<CartResponse> {
+    const response = await this.api.post('/api/v1/cart/', payload);
+    return response.data;
+  }
+
+  async updateCartItem(cartItemId: string, payload: UpdateCartPayload): Promise<CartResponse> {
+    const response = await this.api.patch(`/api/v1/cart/items/${cartItemId}/`, payload);
+    return response.data;
+  }
+
+  async deleteCartItem(cartItemId: string): Promise<CartResponse> {
+    const response = await this.api.post(`/api/v1/cart/items/${cartItemId}/`);
+    return response.data;
   }
 }
 

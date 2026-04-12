@@ -1,42 +1,21 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Image, 
   ScrollView, 
   Text, 
   TouchableOpacity, 
   View, 
+  ActivityIndicator,
   Alert 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useCart } from '@/src/context/CartContext';
+import { useCart } from '@/src/hooks/useCart';
 import api from '@/src/services/api';
+import { MenuItem, MenuResponse, ModifierGroup, ModifierOption } from '@/src/types';
 
-// টাইপ ডেফিনিশন
-interface RestaurantItem {
-  id: string;
-  name: string;
-  description: string;
-  calories: number;
-  price: string;
-  image: string;
-  category: 'main' | 'sides';
-  hasOffer?: boolean;
-}
-
-interface Restaurant {
-  name: string;
-  cuisine: string;
-  rating: number;
-  deliveryTime: string;
-  minOrder: string;
-  distance: string;
-  hours: string;
-  discount?: string;
-  image: string;
-  items: RestaurantItem[];
-}
+// No local type defs needed, using src/types
 
 
 type SpicyLevel = 'None' | 'Hot' | 'Extra Hot';
@@ -56,63 +35,42 @@ export default function ItemDetail() {
   console.log('Params:', params);
   
   // Params থেকে ডাটা নেওয়া - multiple ways
-  const restaurantId = params.id || params.restaurantId || '1';
-  const itemId = params.itemId || '1';
+  // IDs from params
+  const restaurantId = params.id || params.restaurantId;
+  const itemId = params.itemId;
 
-  const [item, setItem] = useState<RestaurantItem | null>(null);
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
-  const [size, setSize] = useState<'Regular' | 'Large'>('Regular');
-  const [quantity, setQuantity] = useState(1);
-  const [extraCheese, setExtraCheese] = useState(false);
-  const [bacon, setBacon] = useState(false);
-  const [avocado, setAvocado] = useState(false);
-  const [spicy, setSpicy] = useState<SpicyLevel>('None');
+  const [item, setItem] = useState<MenuItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [quantity, setQuantity] = useState(1);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({}); // groupId -> optionIds[]
 
   useEffect(() => {
     const fetchItemDetails = async () => {
       try {
         setLoading(true);
-        console.log('Looking for restaurant:', restaurantId, 'item:', itemId);
+        if (!restaurantId || !itemId) return;
 
-        const res = await api.getRestaurant(restaurantId as string);
-        const foundRestaurant = res?.data || res;
-        
-        if (foundRestaurant) {
-          const formattedRestaurant = {
-            ...foundRestaurant,
-            name: foundRestaurant.brand_name || foundRestaurant.name,
-            cuisine: foundRestaurant.short_description || foundRestaurant.cuisine || foundRestaurant.category_name,
-            image: foundRestaurant.logo || foundRestaurant.image,
-            items: foundRestaurant.items || [],
-          };
-          setRestaurant(formattedRestaurant);
-          
-          let foundItem = formattedRestaurant.items?.find((i: any) => i.id?.toString() === itemId || i.uuid === itemId);
-          
-          if (!foundItem) {
-            try {
-               const itemRes = await api.getRestaurantItem(itemId as string);
-               foundItem = itemRes?.data || itemRes;
-            } catch (err) {
-               console.log("Could not fetch individual item", err);
-            }
+        const res: MenuResponse = await api.getRestaurantMenu(restaurantId);
+        if (res.success) {
+          // Find item in categories
+          let foundItem: MenuItem | undefined;
+          for (const category of res.data) {
+            foundItem = category.items.find(i => i.id === itemId);
+            if (foundItem) break;
           }
 
           if (foundItem) {
-            setItem({
-               ...foundItem,
-               name: foundItem.brand_name || foundItem.name,
-               description: foundItem.short_description || foundItem.description,
-               image: foundItem.logo || foundItem.image,
+            setItem(foundItem);
+            // Initialize selected options with defaults or empty based on min_select
+            const initialOptions: Record<string, string[]> = {};
+            foundItem.modifier_groups.forEach(group => {
+              initialOptions[group.id] = [];
             });
-          } else if (formattedRestaurant.items?.length > 0) {
-            // fallback to first item
-            setItem(formattedRestaurant.items[0]);
+            setSelectedOptions(initialOptions);
           }
         }
       } catch (err) {
-        console.error("Error fetching item resources:", err);
+        console.error("Error fetching item details:", err);
       } finally {
         setLoading(false);
       }
@@ -121,69 +79,90 @@ export default function ItemDetail() {
     fetchItemDetails();
   }, [restaurantId, itemId]);
 
-  // Calculate total price
-  const calculateTotal = () => {
+  const calculateTotal = useMemo(() => {
     if (!item) return 0;
-    
-    // SAR রিমুভ করা
-    const priceStr = item.price?.toString().replace(' SAR', '').trim() || '0';
-    const basePrice = parseFloat(priceStr) || 0;
-    
-    let total = basePrice;
-    
-    // Size adjustments
-    if (size === 'Large') total += 5;
-    
-    // Add-ons
-    if (extraCheese) total += 3;
-    if (bacon) total += 5;
-    if (avocado) total += 4;
-    
-    // Spicy level adjustments
-    if (spicy === 'Hot') total += 3;
-    if (spicy === 'Extra Hot') total += 5;
-    
-    // Apply quantity
-    total *= quantity;
-    
-    return total;
+    let total = parseFloat(item.price);
+
+    // Sum up all selected options
+    Object.values(selectedOptions).flat().forEach(optionId => {
+      // Find the option price
+      for (const group of item.modifier_groups) {
+        const option = group.options.find(o => o.id === optionId);
+        if (option) {
+          total += parseFloat(option.price);
+          break;
+        }
+      }
+    });
+
+    return total * quantity;
+  }, [item, selectedOptions, quantity]);
+
+  const toggleOption = (groupId: string, optionId: string, group: ModifierGroup) => {
+    setSelectedOptions(prev => {
+      const current = prev[groupId] || [];
+      const isSelected = current.includes(optionId);
+      
+      let next: string[];
+      if (isSelected) {
+        // Can only deselect if we are above min_select (optional groups usually have min=0)
+        next = current.filter(id => id !== optionId);
+      } else {
+        // Check max_select rule
+        if (group.max_select === 1) {
+          // Radio behavior: replace existing
+          next = [optionId];
+        } else {
+          // Checkbox behavior: add if below max
+          if (current.length < group.max_select) {
+            next = [...current, optionId];
+          } else {
+            // Alert user?
+            return prev;
+          }
+        }
+      }
+      return { ...prev, [groupId]: next };
+    });
   };
 
-  const handleAddToCart = () => {
-    if (!item || !restaurant) return;
+  const validateSelection = () => {
+    if (!item) return false;
+    for (const group of item.modifier_groups) {
+      const selections = selectedOptions[group.id] || [];
+      if (selections.length < group.min_select) {
+        Alert.alert('Required Selection', `Please select at least ${group.min_select} from ${group.name}`);
+        return false;
+      }
+    }
+    return true;
+  };
 
-    const priceStr = item.price?.toString().replace(' SAR', '').trim() || '0';
-    let finalPrice = parseFloat(priceStr) || 0;
-
-    if (size === 'Large') finalPrice += 5;
-    if (extraCheese) finalPrice += 3;
-    if (bacon) finalPrice += 5;
-    if (avocado) finalPrice += 4;
-    if (spicy === 'Hot') finalPrice += 3;
-    if (spicy === 'Extra Hot') finalPrice += 5;
-
-    const cartItem = {
-      id: item.id,
-      restaurantId,
-      restaurantName: restaurant.name,
-      name: item.name,
-      price: finalPrice,
-      quantity,
-      size,
-      extras: { extraCheese, bacon, avocado },
-      spicyLevel: spicy,
-      image: item.image,
-    };
-
-    // Add to cart context
-    addToCart(cartItem);
+  const handleAddToCart = async () => {
+    if (!item || !restaurantId) {
+      console.warn("Item or Restaurant ID missing:", { item, restaurantId });
+      return;
+    }
     
-    const total = calculateTotal();
-    
-    console.log('Added to cart:', cartItem);
-    
-    // Navigate to cart page immediately after adding
-    router.push('/order-process/cart/cart');
+    if (!validateSelection()) return;
+
+    try {
+      const payload = {
+        branch_id: restaurantId,
+        menu_item_id: item.id,
+        quantity,
+        selected_options: Object.values(selectedOptions).flat()
+      };
+
+      console.log("Adding to cart with payload:", payload);
+      await (addToCart(payload) as any).unwrap();
+      
+      Alert.alert('Success', 'Item added to cart!');
+      router.push('/order-process/cart/cart');
+    } catch (err) {
+      console.error("Failed to add to cart:", err);
+      Alert.alert('Error', typeof err === 'string' ? err : 'Failed to add item to cart. Please try again.');
+    }
   };
 
   if (loading) {
@@ -194,7 +173,7 @@ export default function ItemDetail() {
     );
   }
 
-  if (!item || !restaurant) {
+  if (!item) {
     return (
       <SafeAreaView className="flex-1 justify-center items-center bg-white">
         <View className="items-center">
@@ -213,7 +192,7 @@ export default function ItemDetail() {
     );
   }
 
-  const total = calculateTotal();
+  const total = calculateTotal;
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -259,89 +238,46 @@ export default function ItemDetail() {
             </View>
           </View>
 
-          {/* Size Selection - FIXED SECTION */}
-          <View className="mt-8">
-            <View className='flex-row items-center justify-between p-2' >
-              <Text className="text-xl font-semibold text-gray-900">Size</Text>
-              <Text className='text-red-600 p-2 rounded-full bg-red-100' >Required</Text>
-            </View>
-            <View className="bg-gray-50 rounded-xl p-4">
-              {[
-                { label: 'Regular', key: 'Regular' as const, price: 0 },
-                { label: 'Large', key: 'Large' as const, price: 5 },
-              ].map((sizeOption, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => setSize(sizeOption.key)}
-                  className={`flex-row items-center justify-between py-4 ${index < 1 ? 'border-b border-gray-200' : ''}`}
-                >
-                  <View className="flex-row items-center">
-                    <View className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${size === sizeOption.key ? 'bg-orange-500 border-orange-500' : 'border-gray-400'}`}>
-                      {size === sizeOption.key && <Feather name="check" size={14} color="white" />}
-                    </View>
-                    <Text className="text-base">{sizeOption.label}</Text>
-                  </View>
-                  {sizeOption.price > 0 && (
-                    <Text className="text-orange-600 font-medium">+{sizeOption.price} SAR</Text>
+          {/* Dynamic Modifier Groups */}
+          {item.modifier_groups.map((group) => (
+            <View key={group.id} className="mt-8">
+              <View className='flex-row items-center justify-between p-2' >
+                <Text className="text-xl font-semibold text-gray-900">{group.name}</Text>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-gray-500 text-xs">
+                    {group.min_select > 0 ? `Select min ${group.min_select}` : 'Optional'}
+                  </Text>
+                  {group.min_select > 0 && (
+                    <Text className='text-red-600 p-2 rounded-full bg-red-100 text-xs' >Required</Text>
                   )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+                </View>
+              </View>
+              <View className="bg-gray-50 rounded-xl p-4">
+                {group.options.map((option, index) => {
+                  const isSelected = (selectedOptions[group.id] || []).includes(option.id);
+                  const isRadio = group.max_select === 1;
 
-          {/* Add-ons */}
-          <View className="mt-8">
-            <Text className="text-xl font-semibold text-gray-900 mb-4">Add-ons</Text>
-            <View className="bg-gray-50 rounded-xl p-4">
-              {[
-                { label: 'Extra Cheese', price: 3, state: extraCheese, setter: setExtraCheese },
-                { label: 'Bacon', price: 5, state: bacon, setter: setBacon },
-                { label: 'Avocado', price: 4, state: avocado, setter: setAvocado },
-              ].map((addon, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => addon.setter(!addon.state)}
-                  className={`flex-row items-center justify-between py-4 ${index < 2 ? 'border-b border-gray-200' : ''}`}
-                >
-                  <View className="flex-row items-center">
-                    <View className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${addon.state ? 'bg-orange-500 border-orange-500' : 'border-gray-400'}`}>
-                      {addon.state && <Feather name="check" size={14} color="white" />}
-                    </View>
-                    <Text className="text-base">{addon.label}</Text>
-                  </View>
-                  <Text className="text-orange-600 font-medium">+{addon.price} SAR</Text>
-                </TouchableOpacity>
-              ))}
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() => toggleOption(group.id, option.id, group)}
+                      className={`flex-row items-center justify-between py-4 ${index < group.options.length - 1 ? 'border-b border-gray-200' : ''}`}
+                    >
+                      <View className="flex-row items-center">
+                        <View className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${isSelected ? 'bg-orange-500 border-orange-500' : 'border-gray-400'}`}>
+                          {isSelected && <Feather name={isRadio ? "circle" : "check"} size={14} color="white" />}
+                        </View>
+                        <Text className="text-base">{option.name}</Text>
+                      </View>
+                      {parseFloat(option.price) > 0 && (
+                        <Text className="text-orange-600 font-medium">+{parseFloat(option.price).toFixed(2)} SAR</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
-          </View>
-
-          {/* Spicy Level - FIXED SECTION */}
-          <View className="mt-8">
-            <Text className="text-xl font-semibold text-gray-900 mb-4">Spicy Level</Text>
-            <View className="bg-gray-50 rounded-xl p-4">
-              {[
-                { label: 'None', level: 'None' as SpicyLevel, price: 0 },
-                { label: 'Hot', level: 'Hot' as SpicyLevel, price: 3 },
-                { label: 'Extra Hot', level: 'Extra Hot' as SpicyLevel, price: 5 },
-              ].map((spicyOption, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => setSpicy(spicyOption.level)}
-                  className={`flex-row items-center justify-between py-4 ${index < 2 ? 'border-b border-gray-200' : ''}`}
-                >
-                  <View className="flex-row items-center">
-                    <View className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${spicy === spicyOption.level ? 'bg-orange-500 border-orange-500' : 'border-gray-400'}`}>
-                      {spicy === spicyOption.level && <Feather name="check" size={14} color="white" />}
-                    </View>
-                    <Text className="text-base">{spicyOption.label}</Text>
-                  </View>
-                  {spicyOption.price > 0 && (
-                    <Text className="text-orange-600 font-medium">+{spicyOption.price} SAR</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
+          ))}
 
           {/* Quantity & Add to Cart */}
           <View className="mt-10 mb-8">

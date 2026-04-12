@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,26 @@ import {
   Image,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useCart } from '@/src/context/CartContext';
+import { useCart } from '@/src/hooks/useCart';
 import { useRouter } from 'expo-router';
 
 export default function CartScreen() {
-  const { cart, getTotalItems, getTotalPrice, addQuantity, subtractQuantity, removeFromCart, clearCart } = useCart();
+  const { cart, isLoading, fetchCart, updateQuantity, removeItem, clearCart, getTotalItems } = useCart();
   const router = useRouter();
   
-  const subtotal = getTotalPrice();
-  const serviceFee = 5.00;
+  useEffect(() => {
+    fetchCart();
+  }, []);
+
+  const subtotal = parseFloat(cart?.total || '0');
+  const serviceFee = 5.00; // Mock service fee for now
   const total = subtotal + serviceFee;
 
-  const handleRemoveItem = (itemId: string, itemName: string) => {
+  const handleRemoveItem = (cartItemId: string, itemName: string) => {
     Alert.alert(
       'Remove Item',
       `Remove ${itemName} from cart?`,
@@ -30,14 +35,14 @@ export default function CartScreen() {
         { 
           text: 'Remove', 
           style: 'destructive',
-          onPress: () => removeFromCart(itemId)
+          onPress: () => removeItem(cartItemId)
         },
       ]
     );
   };
 
   const handleClearCart = () => {
-    if (cart.length === 0) return;
+    if (!cart || !cart.items || cart.items.length === 0) return;
     
     Alert.alert(
       'Clear Cart',
@@ -54,7 +59,7 @@ export default function CartScreen() {
   };
 
   const handleProceedToCheckout = () => {
-    if (cart.length === 0) {
+    if (!cart || !cart.items || cart.items.length === 0) {
       Alert.alert('Cart Empty', 'Please add items to cart first');
       return;
     }
@@ -76,7 +81,11 @@ export default function CartScreen() {
         <Text className="text-gray-600">{getTotalItems()} items</Text>
       </View>
 
-      {cart.length === 0 ? (
+      {isLoading && !cart ? (
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#f97316" />
+        </View>
+      ) : (!cart || !cart.items || cart.items.length === 0) ? (
         <View className="flex-1 justify-center items-center p-5">
           <Feather name="shopping-cart" size={64} color="#ddd" />
           <Text className="text-xl text-gray-500 mt-4">Your cart is empty</Text>
@@ -94,12 +103,11 @@ export default function CartScreen() {
             className="flex-1"
             showsVerticalScrollIndicator={false}
           >
-            {/* Cart Items */}
             <View className="p-5">
-              {cart.map((item, index) => (
+              {cart.items.map((item, index) => (
                 <View 
-                  key={`${item.id}-${item.restaurantId}-${index}`}
-                  className={`bg-white rounded-xl p-4 mb-4 border border-gray-100 shadow-sm ${index === cart.length - 1 ? 'mb-6' : ''}`}
+                  key={item.cart_item_id}
+                  className={`bg-white rounded-xl p-4 mb-4 border border-gray-100 shadow-sm ${index === (cart.items?.length || 0) - 1 ? 'mb-6' : ''}`}
                 >
                   <View className="flex-row">
                     {/* Item Image */}
@@ -116,7 +124,7 @@ export default function CartScreen() {
                           {item.name}
                         </Text>
                         <TouchableOpacity
-                          onPress={() => handleRemoveItem(item.id, item.name)}
+                          onPress={() => handleRemoveItem(item.cart_item_id, item.name)}
                           className="p-1"
                         >
                           <Feather name="x" size={20} color="#999" />
@@ -125,39 +133,23 @@ export default function CartScreen() {
                       
                       {/* Item Customizations */}
                       <View className="mt-1">
-                        {item.size && (
-                          <Text className="text-sm text-gray-600">{item.size}</Text>
-                        )}
-                        
-                        {item.extras && (
-                          <View className="mt-1">
-                            {item.extras.extraCheese && (
-                              <Text className="text-sm text-gray-600">Extra Cheese</Text>
-                            )}
-                            {item.extras.bacon && (
-                              <Text className="text-sm text-gray-600">Bacon</Text>
-                            )}
-                            {item.extras.avocado && (
-                              <Text className="text-sm text-gray-600">Avocado</Text>
-                            )}
-                          </View>
-                        )}
-                        
-                        {item.spicyLevel && item.spicyLevel !== 'None' && (
-                          <Text className="text-sm text-gray-600">{item.spicyLevel}</Text>
-                        )}
+                        {item.selected_options.map((opt) => (
+                          <Text key={opt.id} className="text-sm text-gray-600">
+                            • {opt.name} ({parseFloat(opt.price).toFixed(2)} SAR)
+                          </Text>
+                        ))}
                       </View>
                       
                       {/* Price and Quantity */}
                       <View className="flex-row items-center justify-between mt-3">
                         <Text className="text-lg font-bold text-gray-900">
-                          {item.price.toFixed(2)} SAR
+                          {parseFloat(item.item_price).toFixed(2)} SAR
                         </Text>
                         
                         {/* Quantity Controls */}
                         <View className="flex-row items-center bg-gray-100 rounded-full px-3 py-1">
                           <TouchableOpacity 
-                            onPress={() => subtractQuantity(item.id)}
+                            onPress={() => updateQuantity(item.cart_item_id, item.quantity - 1)}
                             className="px-2"
                           >
                             <Feather name="minus" size={18} color="#666" />
@@ -166,7 +158,7 @@ export default function CartScreen() {
                             {item.quantity}
                           </Text>
                           <TouchableOpacity 
-                            onPress={() => addQuantity(item.id)}
+                            onPress={() => updateQuantity(item.cart_item_id, item.quantity + 1)}
                             className="px-2"
                           >
                             <Feather name="plus" size={18} color="#666" />
@@ -177,7 +169,7 @@ export default function CartScreen() {
                       {/* Item Total */}
                       <View className="mt-2 pt-2 border-t border-gray-100">
                         <Text className="text-right text-gray-700">
-                          Total: <Text className="font-bold">{(item.price * item.quantity).toFixed(2)} SAR</Text>
+                          Total: <Text className="font-bold">{parseFloat(item.subtotal).toFixed(2)} SAR</Text>
                         </Text>
                       </View>
                     </View>
@@ -204,29 +196,13 @@ export default function CartScreen() {
               <View className="bg-gray-50 rounded-xl p-4">
               
                 
-                {/* Add-ons Summary */}
-                {cart.some(item => item.extras) && (
-                  <View className="mt-2 pt-2 border-t border-gray-200">
-                    {cart.map((item) => {
-                      if (!item.extras) return null;
-                      
-                      const addons = [];
-                      if (item.extras.extraCheese) addons.push('Extra Cheese');
-                      if (item.extras.bacon) addons.push('Bacon');
-                      if (item.extras.avocado) addons.push('Avocado');
-                      
-                      return addons.map((addon, index) => (
-                        <View key={`addon-${item.id}-${index}`} className="flex-row justify-between mb-1">
-                          <Text className="text-gray-500 text-sm">{addon}</Text>
-                          <Text className="text-gray-900 text-sm">
-                            {addon === 'Extra Cheese' ? '3.00' : 
-                             addon === 'Bacon' ? '5.00' : '4.00'} SAR
-                          </Text>
-                        </View>
-                      ));
-                    })}
+                {/* Order Breakdown */}
+                <View className="mt-2">
+                  <View className="flex-row justify-between mb-1">
+                    <Text className="text-gray-500 text-sm">Items Total</Text>
+                    <Text className="text-gray-900 text-sm">{subtotal.toFixed(2)} SAR</Text>
                   </View>
-                )}
+                </View>
                 
                 {/* Totals */}
                 <View className="mt-4 pt-3 border-t border-gray-200">

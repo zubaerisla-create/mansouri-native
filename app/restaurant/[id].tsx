@@ -1,4 +1,4 @@
-import { useCart } from "@/src/context/CartContext";
+import { useCart } from "@/src/hooks/useCart";
 import { Feather } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,33 +19,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import api from "@/src/services/api";
 
-// Type Definitions
-interface RestaurantItem {
-  id: string;
-  name: string;
-  description: string;
-  calories: number;
-  price: string;
-  image: string;
-  category: "main" | "sides";
+import { MenuItem, Category, MenuResponse } from "@/src/types";
+
+type FilterType = "All" | "Offer";
+type ViewMode = "list" | "grid";
+
+interface ExtendedMenuItem extends MenuItem {
   hasOffer?: boolean;
 }
-
-interface Restaurant {
-  id: string;
-  name: string;
-  cuisine: string;
-  rating: number;
-  deliveryTime: string;
-  minOrder: string;
-  distance: string;
-  hours: string;
-  discount?: string;
-  image: string;
-  items: RestaurantItem[];
-}
-type FilterType = "All" | "Offer" | "Main" | "Sides";
-type ViewMode = "list" | "grid";
 
 export default function RestaurantDetail() {
   const router = useRouter();
@@ -54,7 +35,13 @@ export default function RestaurantDetail() {
   const { getTotalItems, toggleFavorite, isFavorite } = useCart();
   const cartCount = getTotalItems();
 
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [restaurantName, setRestaurantName] = useState("");
+  const [branchImage, setBranchImage] = useState("");
+  
+  const [displayedCategories, setDisplayedCategories] = useState<Category[]>([]);
+  const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
@@ -62,100 +49,54 @@ export default function RestaurantDetail() {
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [isRestaurantFavorite, setIsRestaurantFavorite] = useState(false);
 
-  // Pagination states
-  const [displayedItems, setDisplayedItems] = useState<RestaurantItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(7);
-  const [filteredItems, setFilteredItems] = useState<RestaurantItem[]>([]);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMoreItems, setHasMoreItems] = useState(true);
-
-  // Load restaurant data
+  // Load menu data
   useEffect(() => {
-    const fetchRestaurantData = async () => {
+    const fetchMenuData = async () => {
       try {
         setLoading(true);
-        const res = await api.getRestaurant(id as string);
-        const foundRestaurant = res?.data || res; // handle potential nesting
-        if (foundRestaurant) {
-          // Normalize API properties if needed
-          const formattedRestaurant = {
-            ...foundRestaurant,
-            name: foundRestaurant.brand_name || foundRestaurant.name,
-            cuisine: foundRestaurant.short_description || foundRestaurant.cuisine || foundRestaurant.category_name,
-            image: foundRestaurant.logo || foundRestaurant.image,
-            items: foundRestaurant.items || [],
-          };
-
-          setRestaurant(formattedRestaurant);
-          setFilteredItems(formattedRestaurant.items);
-          setDisplayedItems(formattedRestaurant.items.slice(0, itemsPerPage));
-          setIsRestaurantFavorite(isFavorite(formattedRestaurant.id || id as string));
-        } else {
-          setRestaurant(null);
+        const res: MenuResponse = await api.getRestaurantMenu(id as string);
+        if (res.success) {
+          setCategories(res.data);
+          setFilteredCategories(res.data);
+          setDisplayedCategories(res.data);
+          setRestaurantName(res.meta.branch_name);
+          // Fallback image if needed
+          setBranchImage(""); 
+          setIsRestaurantFavorite(isFavorite(id as string));
         }
       } catch (err) {
-        console.error("Error fetching restaurant:", err);
-        setRestaurant(null);
+        console.error("Error fetching menu:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRestaurantData();
+    fetchMenuData();
   }, [id, isFavorite]);
 
   // Apply filters & search
   useEffect(() => {
-    if (!restaurant) return;
+    let filtered = categories.map(cat => ({
+      ...cat,
+      items: cat.items.filter(item => {
+        // Search filter
+        const matchesSearch = !searchQuery.trim() || 
+          item.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+          item.description.toLowerCase().includes(searchQuery.toLowerCase().trim());
+        
+        // Category filter (if needed, but here we show all categories that have matching items)
+        const matchesFilter = activeFilter === "All" || (activeFilter === "Offer" && (item as ExtendedMenuItem).hasOffer);
 
-    let items = restaurant.items;
+        return matchesSearch && matchesFilter;
+      })
+    })).filter(cat => cat.items.length > 0);
 
-    // Apply category filter
-    if (activeFilter === "Offer") {
-      items = items.filter((item) => item.hasOffer);
-    } else if (activeFilter === "Main") {
-      items = items.filter((item) => item.category === "main");
-    } else if (activeFilter === "Sides") { 
-      items = items.filter((item) => item.category === "sides");
-    }
-
-    // Apply search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      items = items.filter(
-        (item) =>
-          item.name.toLowerCase().includes(query) ||
-          item.description.toLowerCase().includes(query),
-      );
-    }
-
-    // Update filtered items
-    setFilteredItems(items);
-
-    // Reset pagination when filter/search changes
-    setPage(1);
-    setDisplayedItems(items.slice(0, itemsPerPage));
-    setHasMoreItems(items.length > itemsPerPage);
-  }, [activeFilter, searchQuery, restaurant]);
+    setFilteredCategories(filtered);
+    setDisplayedCategories(filtered);
+  }, [activeFilter, searchQuery, categories]);
 
   // Load more items
-  const loadMoreItems = () => {
-    if (loadingMore || !hasMoreItems || !filteredItems.length) return;
-
-    setLoadingMore(true);
-    setTimeout(() => {
-      const nextPage = page + 1;
-      const startIndex = 0;
-      const endIndex = nextPage * itemsPerPage;
-      const nextItems = filteredItems.slice(startIndex, endIndex);
-
-      setDisplayedItems(nextItems);
-      setPage(nextPage);
-      setHasMoreItems(endIndex < filteredItems.length);
-      setLoadingMore(false);
-    }, 500);
-  };
+  
 
   // Clear search function
   const handleClearSearch = () => {
@@ -163,48 +104,35 @@ export default function RestaurantDetail() {
   };
 
   const handleToggleFavorite = () => {
-    if (restaurant) {
-      const restaurantInfo = {
-        id: restaurant.id,
-        name: restaurant.name,
-        cuisine: restaurant.cuisine,
-        image: restaurant.image,
-        rating: restaurant.rating,
-        deliveryTime: restaurant.deliveryTime,
-      };
-      toggleFavorite(restaurantInfo);
-      setIsRestaurantFavorite(!isRestaurantFavorite);
+    // Basic favorite logic since we don't have the full restaurant info in this screen yet
+    toggleFavorite({
+      id: id as string,
+      name: restaurantName,
+      image: branchImage,
+      cuisine: "",
+      rating: 0,
+      deliveryTime: "",
+    });
+    setIsRestaurantFavorite(!isRestaurantFavorite);
 
-      Alert.alert(
-        isRestaurantFavorite ? "Removed from favorites" : "Added to favorites",
-        isRestaurantFavorite
-          ? `${restaurant.name} has been removed from your favorites`
-          : `${restaurant.name} has been added to your favorites`,
-      );
-    }
+    Alert.alert(
+      isRestaurantFavorite ? "Removed from favorites" : "Added to favorites",
+      isRestaurantFavorite
+        ? `${restaurantName} has been removed from your favorites`
+        : `${restaurantName} has been added to your favorites`,
+    );
   };
 
   const handleShare = async (platform?: string) => {
-    if (!restaurant) return;
-
-    const shareUrl = Linking.createURL(`/restaurant/${restaurant.id}`);
-    const message = `Check out ${restaurant.name} on FoodApp! ${restaurant.cuisine} • ⭐${restaurant.rating} • ${restaurant.deliveryTime} min delivery\n${shareUrl}`;
+    const shareUrl = Linking.createURL(`/restaurant/${id}`);
+    const message = `Check out ${restaurantName} on FoodApp!\n${shareUrl}`;
 
     if (platform === "more") {
       try {
-        const result = await Share.share({
+        await Share.share({
           message: message,
-          title: `Share ${restaurant.name}`,
+          title: `Share ${restaurantName}`,
         });
-        if (result.action === Share.sharedAction) {
-          if (result.activityType) {
-            console.log("Shared with activity type:", result.activityType);
-          } else {
-            console.log("Shared successfully");
-          }
-        } else if (result.action === Share.dismissedAction) {
-          console.log("Share dismissed");
-        }
       } catch (error) {
         console.error("Error sharing:", error);
       }
@@ -218,153 +146,68 @@ export default function RestaurantDetail() {
     setShareModalVisible(false);
   };
 
-  const renderListItem = ({ item }: { item: RestaurantItem }) => (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={() => {
-        router.push(`/restaurant/item/${item.id}?id=${id}`);
-      }}
-    >
-      <View className="flex-row items-center py-4 border-b border-gray-100 px-4">
-        <Image
-          source={{ uri: item.image }}
-          className="w-24 h-24 rounded-xl mr-4"
-          resizeMode="cover"
-        />
-        <View className="flex-1">
-          <View className="flex-row items-center justify-between p-1 ">
-            <Text className="text-base font-semibold text-black">
-              {item.name}
-            </Text>
-            <View className="flex-row items-center gap-1 bg-[#FF791A1A] p-1 rounded-xl ">
-              <Feather name="clock" size={16} color="#f97316" />
-              <Text className="text-orange-500">+12</Text>
-            </View>
-          </View>
-
-          <Text className="text-sm text-gray-600 mt-1" numberOfLines={2}>
-            {item.description}
-          </Text>
-
-          <View className="flex-row items-center justify-between p-2">
-            <Text className="text-xs text-orange-500">
-              🔥 {item.calories} Calories
-            </Text>
-
-            <View className="flex-row items-center justify-between">
-              <Text className="text-base font-bold text-orange-500">
-                {item.price?.toString().includes('SAR') ? item.price : `${item.price || 0} SAR`}
-              </Text>
-            </View>
-          </View>
+  const renderListItem = ({ item }: { item: MenuItem | (Category & { isHeader: boolean }) }) => {
+    if ('isHeader' in item) {
+      return (
+        <View className="bg-gray-50 px-4 py-3 mt-4">
+          <Text className="text-xl font-bold text-gray-900">{item.category_name}</Text>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      );
+    }
 
-  const renderGridItem = ({ item }: { item: RestaurantItem }) => (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      className="w-[48%] mb-4"
-      onPress={() => {
-        router.push(`/restaurant/item/${item.id}?id=${id}`);
-      }}
-    >
-      <View className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-        <View className="relative">
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => {
+          router.push(`/restaurant/item/${item.id}?id=${id}`);
+        }}
+      >
+        <View className="flex-row items-center py-4 border-b border-gray-100 px-4">
           <Image
-            source={{ uri: item.image }}
-            className="w-full h-40"
+            source={{ uri: item.image || "https://placehold.co/150x150/png" }}
+            className="w-24 h-24 rounded-xl mr-4"
             resizeMode="cover"
           />
-          {item.hasOffer && (
-            <View className="absolute top-2 left-2 bg-green-500 px-2 py-1 rounded-md">
-              <Text className="text-white text-xs font-semibold">Offer</Text>
+          <View className="flex-1">
+            <View className="flex-row items-center justify-between p-1 ">
+              <Text className="text-base font-semibold text-black">
+                {item.name}
+              </Text>
             </View>
-          )}
-          <View className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 rounded">
-            <Text className="text-white text-xs">🔥 {item.calories}</Text>
-          </View>
-        </View>
-        <View className="p-3">
-          <Text className="text-sm font-semibold text-black" numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text className="text-xs text-gray-600 mt-1" numberOfLines={2}>
-            {item.description}
-          </Text>
-          <View className="flex-row items-center justify-between mt-2">
-            <Text className="text-base font-bold text-gray-900">
-              {item.price?.toString().includes('SAR') ? item.price : `${item.price || 0} SAR`}
+
+            <Text className="text-sm text-gray-600 mt-1" numberOfLines={2}>
+              {item.description}
             </Text>
+
+            <View className="flex-row items-center justify-between p-2">
+              <Text className="text-xs text-orange-500">
+                🔥 {item.calories} Calories
+              </Text>
+
+              <View className="flex-row items-center justify-between">
+                <Text className="text-base font-bold text-orange-500">
+                  {parseFloat(item.price).toFixed(2)} SAR
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderFooter = () => {
-    if (!hasMoreItems && filteredItems.length > 0) {
-      return (
-        <View className="py-4 items-center">
-          <Text className="text-gray-500 text-sm">
-            Showing all {filteredItems.length} items
-          </Text>
-        </View>
-      );
-    }
-
-    if (loadingMore) {
-      return (
-        <View className="py-4 items-center">
-          <ActivityIndicator size="small" color="#f97316" />
-          <Text className="text-gray-500 text-sm mt-2">
-            Loading more items...
-          </Text>
-        </View>
-      );
-    }
-
-    if (hasMoreItems && filteredItems.length > 0) {
-      return (
-        <TouchableOpacity onPress={loadMoreItems} className="py-4 items-center">
-          <Text className="text-orange-600 font-semibold">
-            Load More ({filteredItems.length - displayedItems.length} more)
-          </Text>
-          <Text className="text-gray-500 text-xs mt-1">
-            Showing {displayedItems.length} of {filteredItems.length} items
-          </Text>
-        </TouchableOpacity>
-      );
-    }
-
-    return null;
+      </TouchableOpacity>
+    );
   };
+
+  const flattenedData = displayedCategories.flatMap(cat => [
+    { ...cat, isHeader: true, id: `header-${cat.category_id}` },
+    ...cat.items
+  ]);
 
   if (loading) {
     return (
       <SafeAreaView className="flex-1 justify-center items-center bg-white">
         <ActivityIndicator size="large" color="#f97316" />
         <Text className="text-lg text-gray-600 mt-2">
-          Loading restaurant...
+          Loading menu...
         </Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (!restaurant) {
-    return (
-      <SafeAreaView className="flex-1 justify-center items-center bg-white">
-        <Feather name="alert-circle" size={48} color="#f97316" />
-        <Text className="text-xl text-gray-600 mt-4">
-          Restaurant not found 😔
-        </Text>
-        <TouchableOpacity
-          className="mt-6 bg-orange-600 px-6 py-3 rounded-lg"
-          onPress={() => router.back()}
-        >
-          <Text className="text-white font-medium">Go Back</Text>
-        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -373,73 +216,30 @@ export default function RestaurantDetail() {
     <SafeAreaView className="flex-1 bg-white">
       {/* Header Image */}
       <Image
-        source={{ uri: restaurant.image }}
+        source={{ uri: branchImage || "https://placehold.co/400x300/png" }}
         className="w-full h-64"
         resizeMode="cover"
       />
 
       {/* Main Content */}
       <FlatList
-        data={displayedItems}
+        data={flattenedData}
         keyExtractor={(item) => item.id}
-        key={viewMode}
-        numColumns={viewMode === "grid" ? 2 : 1}
-        columnWrapperStyle={
-          viewMode === "grid"
-            ? { justifyContent: "space-between", paddingHorizontal: 16 }
-            : undefined
-        }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
-        onEndReached={loadMoreItems}
-        onEndReachedThreshold={0.5}
         ListHeaderComponent={() => (
           <View className="px-4 mt-20 pb-4">
             {/* Restaurant Info Card */}
             <View className="bg-white rounded-2xl p-5 shadow-lg -mt-10 mb-6 border border-gray-100">
               <View className="flex-row justify-between">
-                <Text className="text-2xl font-bold text-black">
-                  {restaurant.name}
+                <Text className="text-2xl font-bold text-black" numberOfLines={2}>
+                  {restaurantName}
                 </Text>
-                <View className="flex-row items-center">
-                  <Feather name="clock" size={16} color="#c24343" />
-                  <Text className="ml-1 text-sm text-gray-600">
-                    Average: {restaurant.deliveryTime} min
-                  </Text>
-                </View>
               </View>
               <View className="flex-row items-center gap-2 mt-1">
                 <Text className="text-base text-gray-600">
-                  {restaurant.cuisine}
+                  Branch ID: {id}
                 </Text>
-                {restaurant.discount && (
-                  <View className="bg-green-100 px-2 py-1 rounded-full">
-                    <Text className="text-xs font-medium text-green-700">
-                      {restaurant.discount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              <View className="flex-row mt-4 gap-4">
-                <View className="flex-1">
-                  <Text className="text-xs text-gray-500">Distance</Text>
-                  <Text className="text-sm font-medium text-gray-900">
-                    {restaurant.distance}
-                  </Text>
-                </View>
-                <View className="flex-1">
-                  <Text className="text-xs text-gray-500">Hours</Text>
-                  <Text className="text-sm font-medium text-gray-900">
-                    {restaurant.hours}
-                  </Text>
-                </View>
-                <View className="flex-1">
-                  <Text className="text-xs text-gray-500">Min Order</Text>
-                  <Text className="text-sm font-medium text-gray-900">
-                    {restaurant.minOrder}
-                  </Text>
-                </View>
               </View>
             </View>
 
@@ -513,7 +313,7 @@ export default function RestaurantDetail() {
               className="mb-4"
             >
               <View className="flex-row gap-3">
-                {(["All", "Offer", "Main", "Sides"] as FilterType[]).map(
+                {(["All", "Offer"] as FilterType[]).map(
                   (filter) => (
                     <TouchableOpacity
                       key={filter}
@@ -540,27 +340,13 @@ export default function RestaurantDetail() {
             </ScrollView>
           </View>
         )}
-        renderItem={viewMode === "list" ? renderListItem : renderGridItem}
+        renderItem={renderListItem}
         ListEmptyComponent={() => (
           <View className="py-10 items-center">
             <Feather name="search" size={48} color="#ccc" />
             <Text className="text-gray-500 text-base mt-2">No items found</Text>
-            <Text className="text-gray-400 text-sm mt-1">
-              {searchQuery
-                ? `No items matching "${searchQuery}"`
-                : "Try a different filter"}
-            </Text>
-            {searchQuery && (
-              <TouchableOpacity
-                onPress={handleClearSearch}
-                className="mt-4 bg-gray-100 px-4 py-2 rounded-lg"
-              >
-                <Text className="text-gray-700 font-medium">Clear Search</Text>
-              </TouchableOpacity>
-            )}
           </View>
         )}
-        ListFooterComponent={renderFooter}
       />
 
       {/* Floating Cart Button */}
@@ -628,7 +414,7 @@ export default function RestaurantDetail() {
             </View>
 
             <Text className="text-gray-600 mb-6">
-              Share {restaurant.name} with your friends
+              Share {restaurantName} with your friends
             </Text>
 
             <View className="flex-row justify-around mb-8">

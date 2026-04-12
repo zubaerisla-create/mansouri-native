@@ -88,11 +88,22 @@ export const loadStoredAuth = createAsyncThunk(
     try {
       const token = await AsyncStorage.getItem('token');
       const userStr = await AsyncStorage.getItem('user');
-      if (token && userStr) {
-        console.log('HYDRATION DEBUG: Token found in storage:', token.substring(0, 20) + '...');
+      
+      if (token) {
         ApiService.setToken(token);
-        const parsedUser = JSON.parse(userStr);
-        dispatch(setAuthenticated({ token, user: parsedUser }));
+        
+        try {
+          // Verify token by fetching profile
+          const profileResponse = await ApiService.getProfile();
+          const user = profileResponse.data || JSON.parse(userStr || '{}');
+          dispatch(setAuthenticated({ token, user }));
+          console.log('HYDRATION SUCCESS: Token validated');
+        } catch (error) {
+          console.warn('HYDRATION FAILURE: Token invalid or expired, clearing...', error);
+          await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('user');
+          ApiService.setToken(null);
+        }
       }
     } catch (error) {
       console.error('Failed to load auth from storage', error);
