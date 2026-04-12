@@ -1,5 +1,14 @@
 import axios, { AxiosInstance } from 'axios';
-import { AddToCartPayload, CartResponse, MenuResponse, UpdateCartPayload } from '../types';
+import { 
+  AddToCartPayload, 
+  CartResponse, 
+  MenuResponse, 
+  UpdateCartPayload,
+  Car,
+  AddCarPayload,
+  CarResponse,
+  CarListResponse
+} from '../types';
 
 class ApiService {
   private api: AxiosInstance;
@@ -184,6 +193,28 @@ class ApiService {
 
   async deleteCartItem(cartItemId: string): Promise<CartResponse> {
     const response = await this.api.post(`/api/v1/cart/items/${cartItemId}/`);
+    return response.data;
+  }
+
+  // --- Car Management APIs ---
+
+  async getCars(): Promise<CarListResponse> {
+    const response = await this.api.get('/api/v1/user/cars/');
+    return response.data;
+  }
+
+  async addCar(payload: AddCarPayload): Promise<CarResponse> {
+    const response = await this.api.post('/api/v1/user/cars/', payload);
+    return response.data;
+  }
+
+  async updateCar(id: string, payload: Partial<AddCarPayload>): Promise<CarResponse> {
+    const response = await this.api.patch(`/api/v1/user/cars/${id}/`, payload);
+    return response.data;
+  }
+
+  async deleteCar(id: string): Promise<CarResponse> {
+    const response = await this.api.delete(`/api/v1/user/cars/${id}/`);
     return response.data;
   }
 }

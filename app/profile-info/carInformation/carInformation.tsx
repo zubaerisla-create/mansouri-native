@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   TextInput,
@@ -7,18 +7,28 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTranslation } from '@/src/hooks/useTranslation';
 import { AppText as Text } from '@/src/components/AppText';
+import { useAppDispatch, useAppSelector } from '@/src/hooks/useRedux';
+import { updateCar } from '@/src/store/slices/carSlice';
 
 export default function CarInfoScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const dispatch = useAppDispatch();
   const { t, isRTL } = useTranslation();
-  const [model, setModel] = useState('Bugatti');
-  const [plate, setPlate] = useState('ABC345');
-  const [selectedColor, setSelectedColor] = useState<string | null>('Black');
+  
+  const { cars, isLoading } = useAppSelector(state => state.car);
+  const editingCar = cars.find(c => c.id === id);
+
+  const [model, setModel] = useState(editingCar?.car_model || '');
+  const [plate, setPlate] = useState(editingCar?.plate_number || '');
+  const [selectedColor, setSelectedColor] = useState<{name: string, hex: string} | null>(null);
 
   const colors = [
     { name: 'White', hex: '#FFFFFF', border: '#E0E0E0', key: 'colorWhite' },
@@ -30,6 +40,40 @@ export default function CarInfoScreen() {
     { name: 'Brown', hex: '#8B4513', key: 'colorBrown' },
     { name: 'Other', hex: '#6A5ACD', key: 'colorOther' },
   ];
+
+  useEffect(() => {
+    if (editingCar) {
+      const color = colors.find(c => c.hex === editingCar.car_color);
+      if (color) setSelectedColor(color);
+    }
+  }, [editingCar]);
+
+  const handleSave = async () => {
+    if (!id) {
+      Alert.alert('Error', 'No car selected for editing');
+      return;
+    }
+    if (!model || !plate || !selectedColor) {
+      Alert.alert('Required', 'Please fill all details and select a color');
+      return;
+    }
+
+    try {
+      await dispatch(updateCar({
+        id,
+        payload: {
+          car_model: model,
+          plate_number: plate,
+          car_color: selectedColor.hex
+        }
+      })).unwrap();
+      
+      Alert.alert('Success', 'Car information updated successfully');
+      router.back();
+    } catch (error: any) {
+      Alert.alert('Error', error || 'Failed to update car');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -64,6 +108,7 @@ export default function CarInfoScreen() {
             onChangeText={setModel}
             placeholder={t('carModel')}
             autoCapitalize="words"
+            editable={!isLoading}
           />
         </View>
 
@@ -75,15 +120,16 @@ export default function CarInfoScreen() {
             {colors.map((color) => (
               <TouchableOpacity
                 key={color.name}
+                disabled={isLoading}
                 style={[
                   styles.colorCircle,
                   { backgroundColor: color.hex },
                   color.name === 'White' && { borderWidth: 1, borderColor: color.border },
-                  selectedColor === color.name && styles.selectedColor,
+                  selectedColor?.name === color.name && styles.selectedColor,
                 ]}
-                onPress={() => setSelectedColor(color.name)}
+                onPress={() => setSelectedColor(color)}
               >
-                {selectedColor === color.name && (
+                {selectedColor?.name === color.name && (
                   <Ionicons 
                     name="checkmark" 
                     size={20} 
@@ -105,6 +151,7 @@ export default function CarInfoScreen() {
             placeholder={t('examplePlate')}
             autoCapitalize="characters"
             maxLength={10}
+            editable={!isLoading}
           />
           <Text style={[styles.hint, isRTL && { textAlign: 'right' }]}>{t('examplePlate')}</Text>
         </View>
@@ -112,14 +159,16 @@ export default function CarInfoScreen() {
 
       {/* Save Button */}
       <TouchableOpacity 
-        style={styles.saveButton} 
+        style={[styles.saveButton, isLoading && { opacity: 0.7 }]} 
         activeOpacity={0.8}
-        onPress={() => {
-          console.log('Saving car info:', { model, selectedColor, plate });
-          router.back();
-        }}
+        onPress={handleSave}
+        disabled={isLoading}
       >
-        <Text bold style={styles.saveText}>{t('save')}</Text>
+        {isLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text bold style={styles.saveText}>{t('save')}</Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );

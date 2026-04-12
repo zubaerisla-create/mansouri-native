@@ -1,22 +1,29 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // or use react-native-vector-icons
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAppDispatch, useAppSelector } from '@/src/hooks/useRedux';
+import { addCar } from '@/src/store/slices/carSlice';
+import { AppText as Text } from '@/src/components/AppText';
 
 export default function AddCarScreen() {
   const router = useRouter();
-  const [model, setModel] = useState('Bugatti'); // note: it's misspelled in image as "Bugatti"
-  const [plate, setPlate] = useState('ABC345');
-  const [selectedColor, setSelectedColor] = useState<string | null>('Black');
+  const dispatch = useAppDispatch();
+  const { isLoading } = useAppSelector(state => state.car);
+  
+  const [model, setModel] = useState('');
+  const [plate, setPlate] = useState('');
+  const [selectedColor, setSelectedColor] = useState<{name: string, hex: string} | null>(null);
 
   const colors = [
     { name: 'White', hex: '#FFFFFF', border: '#E0E0E0' },
@@ -26,8 +33,28 @@ export default function AddCarScreen() {
     { name: 'Red', hex: '#FF0000' },
     { name: 'Green', hex: '#008000' },
     { name: 'Brown', hex: '#8B4513' },
-    { name: 'Other', hex: '#6A5ACD' }, // purple-ish as in image
+    { name: 'Other', hex: '#6A5ACD' },
   ];
+
+  const handleSave = async () => {
+    if (!model || !plate || !selectedColor) {
+      Alert.alert('Required', 'Please fill all details and select a color');
+      return;
+    }
+
+    try {
+      const result = await dispatch(addCar({
+        car_model: model,
+        plate_number: plate,
+        car_color: selectedColor.hex
+      })).unwrap();
+      
+      console.log('Car added successfully:', result);
+      router.back();
+    } catch (error: any) {
+      Alert.alert('Error', error || 'Failed to add car');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -41,7 +68,7 @@ export default function AddCarScreen() {
         >
           <Ionicons name="arrow-back" size={28} color="#000" />
         </TouchableOpacity>
-        <Text style={styles.title}>Car Information</Text>
+        <Text bold style={styles.title}>Car Information</Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -55,33 +82,35 @@ export default function AddCarScreen() {
 
         {/* Car Model */}
         <View style={styles.field}>
-          <Text style={styles.label}>Car Model</Text>
+          <Text bold style={styles.label}>Car Model</Text>
           <TextInput
             style={styles.input}
             value={model}
             onChangeText={setModel}
-            placeholder="Enter car model"
+            placeholder="Enter car model (e.g. Toyota Camry)"
             autoCapitalize="words"
+            editable={!isLoading}
           />
         </View>
 
         {/* Car Color */}
         <View style={styles.field}>
-          <Text style={styles.label}>Car Color</Text>
+          <Text bold style={styles.label}>Car Color</Text>
 
           <View style={styles.colorGrid}>
             {colors.map((color) => (
               <TouchableOpacity
                 key={color.name}
+                disabled={isLoading}
                 style={[
                   styles.colorCircle,
                   { backgroundColor: color.hex },
                   color.name === 'White' && { borderWidth: 1, borderColor: color.border },
-                  selectedColor === color.name && styles.selectedColor,
+                  selectedColor?.name === color.name && styles.selectedColor,
                 ]}
-                onPress={() => setSelectedColor(color.name)}
+                onPress={() => setSelectedColor(color)}
               >
-                {selectedColor === color.name && (
+                {selectedColor?.name === color.name && (
                   <Ionicons 
                     name="checkmark" 
                     size={20} 
@@ -95,7 +124,7 @@ export default function AddCarScreen() {
 
         {/* Plate Number */}
         <View style={styles.field}>
-          <Text style={styles.label}>Plate Number</Text>
+          <Text bold style={styles.label}>Plate Number</Text>
           <TextInput
             style={styles.input}
             value={plate}
@@ -103,6 +132,7 @@ export default function AddCarScreen() {
             placeholder="Example: ABC1234"
             autoCapitalize="characters"
             maxLength={10}
+            editable={!isLoading}
           />
           <Text style={styles.hint}>Example: ABC1234</Text>
         </View>
@@ -110,15 +140,16 @@ export default function AddCarScreen() {
 
       {/* Save Button */}
       <TouchableOpacity 
-        style={styles.saveButton} 
+        style={[styles.saveButton, isLoading && { opacity: 0.7 }]} 
         activeOpacity={0.8}
-        onPress={() => {
-          // Handle save functionality here
-          console.log('Saving car info:', { model, selectedColor, plate });
-          router.back();
-        }}
+        onPress={handleSave}
+        disabled={isLoading}
       >
-        <Text style={styles.saveText}>Save</Text>
+        {isLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text bold style={styles.saveText}>Save</Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );

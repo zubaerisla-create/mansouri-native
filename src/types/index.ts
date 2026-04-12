@@ -147,3 +147,45 @@ export interface SelectedOption {
 export interface UpdateCartPayload {
   quantity: number;
 }
+
+// --- Car Types ---
+
+export interface Car {
+  id: string;
+  car_model: string;
+  plate_number: string;
+  car_color: string;
+}
+
+export interface AddCarPayload {
+  car_model: string;
+  plate_number: string;
+  car_color: string;
+}
+
+export interface CarResponse {
+  success: boolean;
+  message: string;
+  data: Car;
+  errors: any;
+  meta: {
+    timestamp: string;
+  };
+}
+
+export interface CarListResponse {
+  success: boolean;
+  message: string;
+  data: Car[];
+  errors: any;
+  meta: {
+    count: number;
+    timestamp: string;
+  };
+}
+
+export interface CarState {
+  cars: Car[];
+  isLoading: boolean;
+  error: string | null;
+}

@@ -16,14 +16,24 @@ import { useTranslation } from "@/src/hooks/useTranslation";
 
 import { useAuth } from "@/src/hooks/useAuth";
 import { useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "@/src/hooks/useRedux";
+import { fetchCars, deleteCar } from "@/src/store/slices/carSlice";
 
 export default function ProfileScreen() {
+  const router = useRouter(); // Added router import
+  const dispatch = useAppDispatch();
   const { t, language, toggleLanguage, isRTL } = useTranslation();
   const { user, getProfile, logout } = useAuth();
+  const { cars } = useAppSelector(state => state.car);
 
   useEffect(() => {
     getProfile();
+    dispatch(fetchCars());
   }, []);
+
+  const handleDeleteCar = (id: string) => {
+    dispatch(deleteCar(id));
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -59,34 +69,36 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.carItem}>
-            <Text style={styles.carName}>Mercedes-Benz SLR</Text>
-            <View style={styles.carActions}>
-              <TouchableOpacity>
-                <Link href="/profile-info/carInformation/carInformation">
+          {cars && cars.map((car) => (
+            <View key={car.id} style={styles.carItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.carName}>{car.car_model}</Text>
+                <Text style={styles.carPlate}>{car.plate_number}</Text>
+              </View>
+              <View style={styles.carActions}>
+                <TouchableOpacity
+                  onPress={() => router.push({
+                    pathname: "/profile-info/carInformation/carInformation",
+                    params: { id: car.id }
+                  })}
+                >
                   <Text bold style={styles.editText}>{t('edit')}</Text>
-                </Link>
-              </TouchableOpacity>
-              <TouchableOpacity style={{ marginLeft: 12 }}>
-                <Ionicons name="close" size={20} color="#999" />
-              </TouchableOpacity>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={{ marginLeft: 12 }}
+                  onPress={() => handleDeleteCar(car.id)}
+                >
+                  <Ionicons name="close" size={20} color="#999" />
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          ))}
 
-          <View style={styles.carItem}>
-            <Text style={styles.carName}>Porsche 911</Text>
-            <Text style={styles.carPlate}>2222222 Black - GHJ 4566</Text>
-            <View style={styles.carActions}>
-              <TouchableOpacity>
-                <Link href="/profile-info/carInformation/carInformation">
-                  <Text bold style={styles.editText}>{t('edit')}</Text>
-                </Link>
-              </TouchableOpacity>
-              <TouchableOpacity style={{ marginLeft: 12 }}>
-                <Ionicons name="close" size={20} color="#999" />
-              </TouchableOpacity>
-            </View>
-          </View>
+          {(!cars || cars.length === 0) && (
+            <Text style={{ textAlign: 'center', color: '#94a3b8', marginVertical: 10 }}>
+              No cars saved yet.
+            </Text>
+          )}
         </View>
 
         {/* Settings Items */}

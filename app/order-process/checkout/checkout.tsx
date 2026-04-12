@@ -14,24 +14,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useCart } from '@/src/context/CartContext';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useAppDispatch, useAppSelector } from '@/src/hooks/useRedux';
+import { fetchCars } from '@/src/store/slices/carSlice';
+import { Car } from '@/src/types';
 
 type PickupTime = 'busy' | '15' | '30' | '45' | '60' | '120';
 type PaymentMethod = 'apple-pay' | 'card' | 'wallet' | 'cash';
-type CarType = 'sedan' | 'suv' | 'truck' | 'van';
-
-interface Car {
-  id: string;
-  make: string;
-  model: string;
-  color: string;
-  plateNumber: string;
-  type: CarType;
-}
 
 export default function CheckoutScreen() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const { cart, getTotalPrice, clearCart } = useCart();
   const params = useLocalSearchParams();
+  
+  const { cars, isLoading: carsLoading } = useAppSelector(state => state.car);
   
   const [selectedPickupTime, setSelectedPickupTime] = useState<PickupTime>('30');
   const [customTime, setCustomTime] = useState('');
@@ -42,33 +38,17 @@ export default function CheckoutScreen() {
 
   const [loading, setLoading] = useState(false);
   
-  const [cars, setCars] = useState<Car[]>([
-    { id: '1', make: 'Toyota', model: 'Camry', color: 'Black', plateNumber: 'ABC 123', type: 'sedan' },
-    { id: '2', make: 'Honda', model: 'CR-V', color: 'White', plateNumber: 'XYZ 789', type: 'suv' },
-    { id: '3', make: 'Ford', model: 'F-150', color: 'Blue', plateNumber: 'DEF 456', type: 'truck' },
-  ]);
-
-  // Handle new car from add-car screen
+  // Fetch cars on mount
   useEffect(() => {
-    if (params.newCar) {
-      try {
-        const newCar = JSON.parse(params.newCar as string);
-        const carExists = cars.some(car => 
-          car.plateNumber === newCar.plateNumber && 
-          car.make === newCar.make && 
-          car.model === newCar.model
-        );
-        
-        if (!carExists) {
-          setCars(prev => [...prev, newCar]);
-          setSelectedCar(newCar.id);
-          Alert.alert('Success', 'Car has been added successfully!');
-        }
-      } catch (error) {
-        console.error('Error parsing car data:', error);
-      }
+    dispatch(fetchCars());
+  }, []);
+
+  // Set default car if available and none selected
+  useEffect(() => {
+    if (cars.length > 0 && !selectedCar) {
+      setSelectedCar(cars[0].id);
     }
-  }, [params.newCar]);
+  }, [cars]);
 
   // Calculate totals
   const subtotal = getTotalPrice();
@@ -378,10 +358,10 @@ export default function CheckoutScreen() {
                 
                 <View className="flex-1">
                   <Text className="text-lg font-semibold text-gray-900">
-                    {car.make} {car.model}
+                    {car.car_model}
                   </Text>
                   <Text className="text-gray-600 text-sm mt-1">
-                    {car.color} • {car.plateNumber} • {car.type.toUpperCase()}
+                    {car.plate_number}
                   </Text>
                 </View>
                 
