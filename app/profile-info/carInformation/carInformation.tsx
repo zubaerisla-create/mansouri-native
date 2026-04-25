@@ -43,7 +43,7 @@ export default function CarInfoScreen() {
 
   useEffect(() => {
     if (editingCar) {
-      const color = colors.find(c => c.hex === editingCar.car_color);
+      const color = colors.find(c => c.hex === editingCar.color);
       if (color) setSelectedColor(color);
     }
   }, [editingCar]);
@@ -64,7 +64,7 @@ export default function CarInfoScreen() {
         payload: {
           car_model: model,
           plate_number: plate,
-          car_color: selectedColor.hex
+          color: selectedColor.hex
         }
       })).unwrap();
       

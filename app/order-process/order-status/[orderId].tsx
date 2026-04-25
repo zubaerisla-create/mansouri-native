@@ -1,18 +1,18 @@
+import { useCart } from '@/src/context/CartContext';
+import { Feather } from '@expo/vector-icons';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   Dimensions,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams, Link } from 'expo-router';
-import { useCart } from '@/src/context/CartContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -29,6 +29,8 @@ interface Order {
   carModel: string;
   carColor: string;
   plateNumber: string;
+  customerName?: string;
+  customerPhone?: string;
   itemsCount: number;
   total?: string;
   items?: Array<{ name: string; quantity: number; price: number }>;
@@ -36,9 +38,10 @@ interface Order {
 
 export default function OrderTrackingScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ orderId: string; fromFeedback?: string }>();
+  const params = useLocalSearchParams<{ orderId: string; fromFeedback?: string; status?: string }>();
   const orderId = params.orderId || 'ORD-20260119-7842';
   const fromFeedback = params.fromFeedback === 'true';
+  const initialStatusParam = params.status?.toLowerCase();
   const { clearCart } = useCart();
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -66,6 +69,8 @@ export default function OrderTrackingScreen() {
     carModel: 'Toyota Camry',
     carColor: 'Black',
     plateNumber: 'ABC 123',
+    customerName: 'John Doe',
+    customerPhone: '+966 50 123 4567',
     itemsCount: 3,
     total: '68.00',
     items: [
@@ -77,19 +82,31 @@ export default function OrderTrackingScreen() {
   // Simulate fetching order
   useEffect(() => {
     setTimeout(() => {
-      // If coming from feedback page, set status to 'delivered'
+      // Map external status to internal status
+      let finalStatus: OrderStatus = 'pending';
+
+      const mappedStatus = initialStatusParam || MOCK_ORDER.status;
+      if (mappedStatus === 'completed' || mappedStatus === 'delivered') finalStatus = 'delivered';
+      else if (mappedStatus === 'preparing') finalStatus = 'preparing';
+      else if (mappedStatus === 'ready') finalStatus = 'ready';
+      else if (mappedStatus === 'confirmed' || mappedStatus === 'order_sent') finalStatus = 'confirmed';
+      else finalStatus = 'pending';
+
+      // If coming from feedback page, force delivered
+      if (fromFeedback) finalStatus = 'delivered';
+
       const initialOrder = {
         ...MOCK_ORDER,
-        status: fromFeedback ? 'delivered' : MOCK_ORDER.status
+        status: finalStatus
       };
-      
+
       setOrder(initialOrder);
       if (initialOrder.countdownSeconds && initialOrder.status === 'pending') {
         setSecondsLeft(initialOrder.countdownSeconds);
       }
       setLoading(false);
     }, 1200);
-  }, [orderId, fromFeedback]);
+  }, [orderId, fromFeedback, initialStatusParam]);
 
   // Countdown timer
   useEffect(() => {
@@ -116,11 +133,11 @@ export default function OrderTrackingScreen() {
   useEffect(() => {
     if (order?.status === 'confirmed') {
       const timer = setTimeout(() => {
-        setOrder(prevOrder => 
+        setOrder(prevOrder =>
           prevOrder ? { ...prevOrder, status: 'preparing' } : null
         );
       }, 3000); // Wait 3 seconds before moving to preparing
-      
+
       return () => clearTimeout(timer);
     }
   }, [order?.status]);
@@ -162,14 +179,14 @@ export default function OrderTrackingScreen() {
 
   const simulateStatusChange = () => {
     if (!order) return;
-    
+
     const statusOrder: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'delivered'];
     const currentIndex = statusOrder.indexOf(order.status);
-    
+
     if (currentIndex < statusOrder.length - 1) {
       const nextStatus = statusOrder[currentIndex + 1];
       setOrder({ ...order, status: nextStatus });
-      
+
       if (nextStatus === 'delivered') {
         Alert.alert('Order Delivered!', 'Your order has been delivered successfully!');
       }
@@ -205,9 +222,8 @@ export default function OrderTrackingScreen() {
         {/* Header Status Circle */}
         <View className="items-center" style={{ marginTop: responsiveHeight(3), marginBottom: responsiveHeight(2) }}>
           <View
-            className={`rounded-full items-center justify-center border-8 ${
-              isDelivered ? 'border-green-500 bg-green-50' : 'border-orange-400 bg-orange-50'
-            }`}
+            className={`rounded-full items-center justify-center border-8 ${isDelivered ? 'border-green-500 bg-green-50' : 'border-orange-400 bg-orange-50'
+              }`}
             style={{
               width: responsiveWidth(35),
               height: responsiveWidth(35),
@@ -226,8 +242,8 @@ export default function OrderTrackingScreen() {
             )}
           </View>
 
-          <Text 
-            style={{ 
+          <Text
+            style={{
               fontSize: responsiveFontSize(24),
               marginTop: responsiveHeight(1.5),
               marginHorizontal: responsiveWidth(5),
@@ -241,7 +257,7 @@ export default function OrderTrackingScreen() {
             {isDelivered && 'Order Delivered!'}
           </Text>
 
-          <Text 
+          <Text
             style={{
               fontSize: responsiveFontSize(14),
               marginTop: responsiveHeight(0.5),
@@ -260,15 +276,14 @@ export default function OrderTrackingScreen() {
         {/* Progress Bar */}
         <View style={{ paddingHorizontal: responsiveWidth(8), marginBottom: responsiveHeight(3) }}>
           <View className="flex-row justify-between items-center">
-            {['Order Sent',  'Preparing', 'Ready', 'Delivered'].map(
+            {['Order Sent', 'Preparing', 'Ready', 'Delivered'].map(
               (label, i) => (
                 <View key={label} className="items-center" style={{ flex: 1 }}>
                   <View
-                    className={`rounded-full border-2 ${
-                      i <= progressIndex
+                    className={`rounded-full border-2 ${i <= progressIndex
                         ? 'bg-orange-500 border-orange-500'
                         : 'bg-white border-gray-300'
-                    }`}
+                      }`}
                     style={{
                       width: responsiveWidth(4.5),
                       height: responsiveWidth(4.5),
@@ -277,9 +292,8 @@ export default function OrderTrackingScreen() {
                   />
                   <Text
                     style={{ fontSize: responsiveFontSize(10) }}
-                    className={`mt-1 text-center ${
-                      i <= progressIndex ? 'text-orange-600 font-medium' : 'text-gray-500'
-                    }`}
+                    className={`mt-1 text-center ${i <= progressIndex ? 'text-orange-600 font-medium' : 'text-gray-500'
+                      }`}
                   >
                     {label}
                   </Text>
@@ -289,7 +303,7 @@ export default function OrderTrackingScreen() {
           </View>
 
           {/* Connecting line */}
-          <View 
+          <View
             className="absolute bg-gray-200 -z-10"
             style={{
               top: responsiveHeight(1),
@@ -311,7 +325,7 @@ export default function OrderTrackingScreen() {
 
         {/* Take me there text - Show for preparing and ready status */}
         {(isPreparing || isReady) && (
-          <View 
+          <View
             className="mx-5 mb-4"
             style={{
               marginHorizontal: responsiveWidth(5),
@@ -323,8 +337,8 @@ export default function OrderTrackingScreen() {
               className="flex-row justify-center bg-orange-500 p-4 ml-16 mr-16 rounded-2xl"
             >
               <Feather name="map-pin" size={20} color="#ffffff" style={{ marginRight: 8 }} />
-              <Text 
-                style={{ 
+              <Text
+                style={{
                   fontSize: responsiveFontSize(18),
                   textAlign: 'center',
                 }}
@@ -337,7 +351,7 @@ export default function OrderTrackingScreen() {
         )}
 
         {/* Restaurant Card */}
-        <View 
+        <View
           className="mx-5 mb-6 bg-white rounded-2xl shadow-sm border border-gray-100"
           style={{
             padding: responsiveWidth(4),
@@ -356,20 +370,19 @@ export default function OrderTrackingScreen() {
             />
             <View className="flex-1">
               <View className="flex-row items-center justify-between">
-                <Text 
+                <Text
                   style={{ fontSize: responsiveFontSize(18) }}
                   className="font-semibold text-gray-900"
                 >
                   {order.restaurantName}
                 </Text>
                 <View
-                  className={`px-3 py-1 rounded-full ${
-                    isDelivered
+                  className={`px-3 py-1 rounded-full ${isDelivered
                       ? 'bg-green-100'
                       : isPending
-                      ? 'bg-orange-100'
-                      : 'bg-blue-100'
-                  }`}
+                        ? 'bg-orange-100'
+                        : 'bg-blue-100'
+                    }`}
                   style={{
                     paddingHorizontal: responsiveWidth(3),
                     paddingVertical: responsiveHeight(0.5),
@@ -377,13 +390,12 @@ export default function OrderTrackingScreen() {
                 >
                   <Text
                     style={{ fontSize: responsiveFontSize(10) }}
-                    className={`font-medium ${
-                      isDelivered
+                    className={`font-medium ${isDelivered
                         ? 'text-green-700'
                         : isPending
-                        ? 'text-orange-700'
-                        : 'text-blue-700'
-                    }`}
+                          ? 'text-orange-700'
+                          : 'text-blue-700'
+                      }`}
                   >
                     {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                   </Text>
@@ -403,7 +415,7 @@ export default function OrderTrackingScreen() {
         </View>
 
         {/* Your Car Info */}
-        <View 
+        <View
           className="mx-5 mb-8 bg-white rounded-2xl shadow-sm border border-gray-100"
           style={{
             padding: responsiveWidth(5),
@@ -411,7 +423,7 @@ export default function OrderTrackingScreen() {
             marginBottom: responsiveHeight(2.5),
           }}
         >
-          <Text 
+          <Text
             style={{ fontSize: responsiveFontSize(18) }}
             className="font-semibold text-gray-900 mb-4"
           >
@@ -445,9 +457,44 @@ export default function OrderTrackingScreen() {
           </View>
         </View>
 
+        {/* Customer Details */}
+        <View
+          className="mx-5 mb-8 bg-white rounded-2xl shadow-sm border border-gray-100"
+          style={{
+            padding: responsiveWidth(5),
+            marginHorizontal: responsiveWidth(5),
+            marginBottom: responsiveHeight(2.5),
+          }}
+        >
+          <Text
+            style={{ fontSize: responsiveFontSize(18) }}
+            className="font-semibold text-gray-900 mb-4"
+          >
+            Customer Details
+          </Text>
+          <View className="space-y-3">
+            <View className="flex-row justify-between">
+              <Text style={{ fontSize: responsiveFontSize(14) }} className="text-gray-600">
+                Name
+              </Text>
+              <Text style={{ fontSize: responsiveFontSize(14) }} className="text-gray-900 font-medium">
+                {order.customerName || 'N/A'}
+              </Text>
+            </View>
+            <View className="flex-row justify-between">
+              <Text style={{ fontSize: responsiveFontSize(14) }} className="text-gray-600">
+                Phone
+              </Text>
+              <Text style={{ fontSize: responsiveFontSize(14) }} className="text-gray-900 font-medium">
+                {order.customerPhone || 'N/A'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* Order Items */}
         {order.items && order.items.length > 0 && (
-          <View 
+          <View
             className="mx-5 mb-8 bg-white rounded-2xl shadow-sm border border-gray-100"
             style={{
               padding: responsiveWidth(5),
@@ -455,7 +502,7 @@ export default function OrderTrackingScreen() {
               marginBottom: responsiveHeight(2.5),
             }}
           >
-            <Text 
+            <Text
               style={{ fontSize: responsiveFontSize(18) }}
               className="font-semibold text-gray-900 mb-4"
             >
@@ -474,7 +521,7 @@ export default function OrderTrackingScreen() {
               ))}
               {order.total && (
                 <>
-                  <View 
+                  <View
                     className="bg-gray-300 my-2"
                     style={{ height: responsiveWidth(0.1) }}
                   />
@@ -493,7 +540,7 @@ export default function OrderTrackingScreen() {
         )}
 
         {/* Action Buttons */}
-        <View 
+        <View
           className="px-5 mb-10"
           style={{
             paddingHorizontal: responsiveWidth(5),
@@ -518,43 +565,43 @@ export default function OrderTrackingScreen() {
           {(isConfirmed || isPreparing) && (
 
 
-<View>
+            <View>
 
-<View className='bg-[#2563EB0D] p-2 rounded-2xl items-center justify-center mb-4 pt-4 pb-4' >
+              <View className='bg-[#2563EB0D] p-2 rounded-2xl items-center justify-center mb-4 pt-4 pb-4' >
 
-  <Text className='font-bold' >
-    I've Arrived!
-  </Text>
+                <Text className='font-bold' >
+                  I've Arrived!
+                </Text>
 
-  <Text className='text-[#64748B]' >
-    Tap to notify the restaurant
-  </Text>
+                <Text className='text-[#64748B]' >
+                  Tap to notify the restaurant
+                </Text>
 
-  <Text className='text-[#64748B]' >
-    The restaurant will be notified and will bring your order to your car
-  </Text>
+                <Text className='text-[#64748B]' >
+                  The restaurant will be notified and will bring your order to your car
+                </Text>
 
-  </View>
+              </View>
 
 
 
-        <TouchableOpacity
- 
-  className="bg-[#FFE415] rounded-xl items-center shadow-md mb-4 ml-16 mr-16 flex-row justify-center"
-  style={{
-    paddingVertical: responsiveHeight(2.5),
-  }}
-> 
-  <Text style={{ fontSize: responsiveFontSize(18) }}  className="text-black pr-4 font-bold mr-2">
-    Pepeep
-  </Text>
-  <Image 
-    source={{uri: 'https://i.ibb.co.com/XxL2hrrv/picon-horn.png'}} 
-    style={{ width: 24, height: 24 }} 
-  />
-</TouchableOpacity>
+              <TouchableOpacity
 
-  </View>
+                className="bg-[#FFE415] rounded-xl items-center shadow-md mb-4 ml-16 mr-16 flex-row justify-center"
+                style={{
+                  paddingVertical: responsiveHeight(2.5),
+                }}
+              >
+                <Text style={{ fontSize: responsiveFontSize(18) }} className="text-black pr-4 font-bold mr-2">
+                  Pepeep
+                </Text>
+                <Image
+                  source={{ uri: 'https://i.ibb.co.com/XxL2hrrv/picon-horn.png' }}
+                  style={{ width: 24, height: 24 }}
+                />
+              </TouchableOpacity>
+
+            </View>
 
           )}
 
@@ -563,7 +610,7 @@ export default function OrderTrackingScreen() {
             <TouchableOpacity
               onPress={() => {
                 // Simulate moving to preparing status
-                setOrder(prevOrder => 
+                setOrder(prevOrder =>
                   prevOrder ? { ...prevOrder, status: 'preparing' } : null
                 );
               }}
@@ -579,24 +626,24 @@ export default function OrderTrackingScreen() {
           )}
 
           {isPreparing && (
-               <Link href="/order-process/showQrCode/showQrCode" asChild>
-                <TouchableOpacity
-                  className="bg-orange-600 rounded-xl items-center shadow-md mb-4"
-                  style={{
-                    paddingVertical: responsiveHeight(2.5),
-                  }}
-                >
-                  <Text style={{ fontSize: responsiveFontSize(16) }} className="text-white font-bold">
-                    Display QR-Code to Confirm Delivery
-                  </Text>
-                </TouchableOpacity>
-              </Link>
+            <Link href="/order-process/showQrCode/showQrCode" asChild>
+              <TouchableOpacity
+                className="bg-orange-600 rounded-xl items-center shadow-md mb-4"
+                style={{
+                  paddingVertical: responsiveHeight(2.5),
+                }}
+              >
+                <Text style={{ fontSize: responsiveFontSize(16) }} className="text-white font-bold">
+                  Display QR-Code to Confirm Delivery
+                </Text>
+              </TouchableOpacity>
+            </Link>
           )}
 
           {isReady && (
             <>
               <TouchableOpacity
-                
+
                 className="bg-yellow-500 rounded-xl items-center shadow-md mb-4 flex-row justify-center"
                 style={{
                   paddingVertical: responsiveHeight(2.5),

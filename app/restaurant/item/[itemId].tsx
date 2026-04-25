@@ -41,41 +41,49 @@ export default function ItemDetail() {
 
   const [item, setItem] = useState<MenuItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({}); // groupId -> optionIds[]
 
-  useEffect(() => {
-    const fetchItemDetails = async () => {
-      try {
-        setLoading(true);
-        if (!restaurantId || !itemId) return;
-
-        const res: MenuResponse = await api.getRestaurantMenu(restaurantId);
-        if (res.success) {
-          // Find item in categories
-          let foundItem: MenuItem | undefined;
-          for (const category of res.data) {
-            foundItem = category.items.find(i => i.id === itemId);
-            if (foundItem) break;
-          }
-
-          if (foundItem) {
-            setItem(foundItem);
-            // Initialize selected options with defaults or empty based on min_select
-            const initialOptions: Record<string, string[]> = {};
-            foundItem.modifier_groups.forEach(group => {
-              initialOptions[group.id] = [];
-            });
-            setSelectedOptions(initialOptions);
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching item details:", err);
-      } finally {
-        setLoading(false);
+  const fetchItemDetails = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      if (!restaurantId || !itemId) {
+        throw new Error(`Missing restaurant (${restaurantId}) or item (${itemId}) ID`);
       }
-    };
 
+      console.log(`Fetching details for item ${itemId} from restaurant ${restaurantId}`);
+      const item = await api.getRestaurantItem(restaurantId, itemId);
+      console.log('Fetched item details:', item);
+      
+      setItem({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        description: item.description,
+        calories: item.calories,
+        dietary_info: item.dietary_info || [],
+        modifier_groups: item.modifier_groups || [],
+        image: item.image || item.photo
+      });
+      
+      // Initialize selected options with defaults or empty based on min_select
+      const initialOptions: Record<string, string[]> = {};
+      (item.modifier_groups || []).forEach((group: any) => {
+        initialOptions[group.id] = [];
+      });
+      setSelectedOptions(initialOptions);
+    } catch (err: any) {
+      const errorMessage = err?.message || 'Failed to load item details. Please try again.';
+      setError(errorMessage);
+      console.error("Error fetching item details:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchItemDetails();
   }, [restaurantId, itemId]);
 
@@ -169,6 +177,42 @@ export default function ItemDetail() {
     return (
       <SafeAreaView className="flex-1 justify-center items-center bg-white">
         <Text className="text-xl text-gray-600">Loading item details...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView className="flex-1 bg-white">
+        <View className="flex-1 justify-center items-center px-6">
+          <View className="bg-red-50 rounded-2xl p-6 border border-red-200 items-center">
+            <Feather name="alert-circle" size={48} color="#dc2626" />
+            <Text className="text-xl font-bold text-gray-900 mt-4 text-center">
+              Unable to Load Item
+            </Text>
+            <Text className="text-base text-gray-600 mt-3 text-center leading-5">
+              {error}
+            </Text>
+            <View className="flex-row gap-3 mt-6 w-full">
+              <TouchableOpacity
+                onPress={fetchItemDetails}
+                className="flex-1 bg-orange-600 rounded-lg py-3"
+              >
+                <Text className="text-white font-semibold text-center">
+                  Try Again
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                className="flex-1 bg-gray-300 rounded-lg py-3"
+              >
+                <Text className="text-gray-800 font-semibold text-center">
+                  Go Back
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </SafeAreaView>
     );
   }

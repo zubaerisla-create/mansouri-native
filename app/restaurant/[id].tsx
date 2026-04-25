@@ -43,34 +43,39 @@ export default function RestaurantDetail() {
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [activeFilter, setActiveFilter] = useState<FilterType>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [isRestaurantFavorite, setIsRestaurantFavorite] = useState(false);
 
-  // Load menu data
-  useEffect(() => {
-    const fetchMenuData = async () => {
-      try {
-        setLoading(true);
-        const res: MenuResponse = await api.getRestaurantMenu(id as string);
-        if (res.success) {
-          setCategories(res.data);
-          setFilteredCategories(res.data);
-          setDisplayedCategories(res.data);
-          setRestaurantName(res.meta.branch_name);
-          // Fallback image if needed
-          setBranchImage(""); 
-          setIsRestaurantFavorite(isFavorite(id as string));
-        }
-      } catch (err) {
-        console.error("Error fetching menu:", err);
-      } finally {
-        setLoading(false);
+  // Fetch menu data function
+  const fetchMenuData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res: MenuResponse = await api.getRestaurantMenu(id as string);
+      if (res.success) {
+        setCategories(res.data);
+        setFilteredCategories(res.data);
+        setDisplayedCategories(res.data);
+        setRestaurantName(res.meta.branch_name);
+        // Fallback image if needed
+        setBranchImage(""); 
+        setIsRestaurantFavorite(isFavorite(id as string));
       }
-    };
+    } catch (err: any) {
+      const errorMessage = err?.message || 'An unexpected error occurred while loading the menu.';
+      setError(errorMessage);
+      console.error("Error fetching menu:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Load menu data on mount
+  useEffect(() => {
     fetchMenuData();
   }, [id, isFavorite]);
 
@@ -208,6 +213,46 @@ export default function RestaurantDetail() {
         <Text className="text-lg text-gray-600 mt-2">
           Loading menu...
         </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView className="flex-1 bg-white">
+        <View className="flex-1 justify-center items-center px-6">
+          <View className="bg-red-50 rounded-2xl p-6 border border-red-200 items-center">
+            <Feather name="alert-circle" size={48} color="#dc2626" />
+            <Text className="text-xl font-bold text-gray-900 mt-4 text-center">
+              Unable to Load Menu
+            </Text>
+            <Text className="text-base text-gray-600 mt-3 text-center leading-5">
+              {error}
+            </Text>
+            <View className="flex-row gap-3 mt-6 w-full">
+              <TouchableOpacity
+                onPress={() => {
+                  setError(null);
+                  setLoading(true);
+                  fetchMenuData();
+                }}
+                className="flex-1 bg-orange-600 rounded-lg py-3"
+              >
+                <Text className="text-white font-semibold text-center">
+                  Try Again
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                className="flex-1 bg-gray-300 rounded-lg py-3"
+              >
+                <Text className="text-gray-800 font-semibold text-center">
+                  Go Back
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </SafeAreaView>
     );
   }

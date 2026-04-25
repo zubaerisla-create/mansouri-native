@@ -102,7 +102,7 @@ export default function AuthPhoneNumberScreen() {
   const inputRef = useRef<TextInput>(null);
   const router = useRouter();
   const { height } = useWindowDimensions();
-  const { sendOTP } = useAuth();
+  const { sendOTP, error, clearError } = useAuth();
 
   const isSmall = height < 680;
   const scale = isSmall ? 0.88 : height > 850 ? 1.06 : 1;
@@ -148,6 +148,7 @@ export default function AuthPhoneNumberScreen() {
   const onPhoneChange = (value: string) => {
     const digits = getDigits(value).slice(0, selectedCountry.maxDigits + 1);
     setPhoneDigits(digits);
+    if (error) clearError();
   };
 
   const onSubmit = async () => {
@@ -159,7 +160,7 @@ export default function AuthPhoneNumberScreen() {
       setIsSubmitting(true);
 
       const fullPhone = `${selectedCountry.dialCode}${phoneDigits}`;
-      const success = await sendOTP(fullPhone, 'login');
+      const success = await sendOTP(fullPhone, 'login', { showAlert: false });
 
       if (success) {
         const formatted = formatDisplay(phoneDigits, selectedCountry.code);
@@ -252,6 +253,20 @@ export default function AuthPhoneNumberScreen() {
                 : <AlertCircle size={fs(18)} color="#EF4444" style={{ marginLeft: 8 }} />
             )}
           </View>
+
+          {error && (
+            <Text 
+              style={{ 
+                color: '#EF4444', 
+                textAlign: 'center', 
+                marginTop: sp(12),
+                fontSize: fs(13),
+                fontWeight: '500'
+              }}
+            >
+              {error}
+            </Text>
+          )}
 
           {/* Inline hint line */}
           {hintMessage && (

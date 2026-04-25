@@ -46,7 +46,7 @@ export default function AddCarScreen() {
       const result = await dispatch(addCar({
         car_model: model,
         plate_number: plate,
-        car_color: selectedColor.hex
+        color: selectedColor.hex
       })).unwrap();
       
       console.log('Car added successfully:', result);

@@ -1,14 +1,15 @@
 import { CartProvider } from "@/src/context/CartContext";
 import { LanguageProvider } from "@/src/context/LanguageContext";
 import { loadStoredAuth } from "@/src/features/auth/authSlice";
+import { useAppDispatch, useAppSelector } from "@/src/hooks/useRedux";
 import { store } from "@/src/store";
+import { StripeProvider } from "@stripe/stripe-react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { Image, View } from "react-native";
 import { Provider } from "react-redux";
 import "../global.css";
-import { useAppDispatch, useAppSelector } from "@/src/hooks/useRedux";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,7 +23,7 @@ function InitialLayout() {
   useEffect(() => {
     // Restore authentication state
     dispatch(loadStoredAuth() as any);
-    
+
     const prepare = async () => {
       try {
         // Wait for a bit to show splash
@@ -55,8 +56,8 @@ function InitialLayout() {
   if (!appReady) {
     return (
       <View className="flex-1 justify-center items-center bg-[#FF5101]">
-        <Image 
-          source={require('@/assets/images/splash-screen.png')} 
+        <Image
+          source={require('@/assets/images/splash-screen.png')}
           style={{ width: '100%', height: '100%' }}
           resizeMode="cover"
         />
@@ -68,13 +69,21 @@ function InitialLayout() {
 }
 
 export default function RootLayout() {
+  const stripeKey = "pk_test_51SKt7eIzTYoXma53SGBAyxwQuu3rWCWKF1b73aSuCmAdePLZTJHybIrnNNLqaeLNkqDyuURchGShP1Nd3iwIt0TH008bzQlKpY";
+  console.log('💳 Initializing Stripe with key:', stripeKey.substring(0, 15) + '...');
+
   return (
     <Provider store={store}>
-      <LanguageProvider>
-        <CartProvider>
-          <InitialLayout />
-        </CartProvider>
-      </LanguageProvider>
+      <StripeProvider
+        publishableKey={stripeKey}
+        merchantIdentifier="merchant.com.mansouri"
+      >
+        <LanguageProvider>
+          <CartProvider>
+            <InitialLayout />
+          </CartProvider>
+        </LanguageProvider>
+      </StripeProvider>
     </Provider>
   );
 }

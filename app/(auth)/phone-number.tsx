@@ -102,7 +102,7 @@ export default function AuthPhoneNumberScreen() {
   const inputRef   = useRef<TextInput>(null);
   const router     = useRouter();
   const { height } = useWindowDimensions();
-  const { sendOTP } = useAuth();
+  const { sendOTP, error, clearError } = useAuth();
 
   const isSmall = height < 680;
   const scale   = isSmall ? 0.88 : height > 850 ? 1.06 : 1;
@@ -148,6 +148,7 @@ export default function AuthPhoneNumberScreen() {
   const onPhoneChange = (value: string) => {
     const digits = getDigits(value).slice(0, selectedCountry.maxDigits + 1);
     setPhoneDigits(digits);
+    if (error) clearError();
   };
 
   const onSubmit = async () => {
@@ -159,7 +160,7 @@ export default function AuthPhoneNumberScreen() {
       setIsSubmitting(true);
       
       const fullPhone = `${selectedCountry.dialCode}${phoneDigits}`;
-      const success = await sendOTP(fullPhone, 'login');
+      const success = await sendOTP(fullPhone, 'login', { showAlert: false });
 
       if (success) {
         const formatted = formatDisplay(phoneDigits, selectedCountry.code);
@@ -253,6 +254,20 @@ export default function AuthPhoneNumberScreen() {
             )}
           </View>
 
+          {error && (
+            <Text 
+              style={{ 
+                color: '#EF4444', 
+                textAlign: 'center', 
+                marginTop: sp(12),
+                fontSize: fs(13),
+                fontWeight: '500'
+              }}
+            >
+              {error}
+            </Text>
+          )}
+
           {/* Inline hint line */}
           {hintMessage && (
             <View style={[styles.hintBox, hintState === 'ok' ? styles.hintOk : styles.hintWarn]}>
@@ -323,6 +338,15 @@ export default function AuthPhoneNumberScreen() {
               ? <ActivityIndicator color="#fff" size="small" />
               : <Text style={[styles.btnTxt, { fontSize: fs(16) }]}>Continue</Text>
             }
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={{ marginTop: sp(16), alignItems: 'center' }}
+            onPress={() => router.push('/(auth)/employee-login')}
+          >
+            <Text style={{ color: '#6B7280', fontSize: fs(14), fontWeight: '500' }}>
+              Login as Employee
+            </Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

@@ -5,6 +5,7 @@ import { FlatList, TouchableOpacity, View, ActivityIndicator, RefreshControl, Al
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from '@/src/hooks/useTranslation';
 import { AppText as Text } from '../AppText';
+import api from '@/src/services/api';
 
 // API Service - You'll need to implement this based on your backend
 interface OrderItem {
@@ -21,7 +22,7 @@ export interface Order {
   orderId: string;
   dateTime: string;
   total: string;
-  status: 'Preparing' | 'Pending' | 'Completed' | 'Delivered' | 'Cancelled';
+  status: string;
   rating?: number;
   canRate?: boolean;
   items?: OrderItem[];
@@ -164,12 +165,35 @@ export function OrderHistoryScreen() {
   const fetchOrders = async () => {
     try {
       setError(null);
-      const data = await mockOrdersApi.fetchOrders();
-      // Sort by date (newest first)
-      const sortedData = data.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setOrders(sortedData);
+      const response = await api.getOrders();
+      
+      if (response.success && response.data) {
+        const mappedOrders: Order[] = response.data.map((item: any) => ({
+          id: item.id,
+          restaurantName: item.restaurant_name,
+          orderId: item.order_number,
+          dateTime: new Date(item.created_at).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric' 
+          }) + ' • ' + new Date(item.created_at).toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          }),
+          total: `${item.total} SAR`,
+          status: item.status,
+          createdAt: new Date(item.created_at),
+          updatedAt: new Date(item.created_at),
+          paymentMethod: item.payment_method,
+        }));
+
+        // Sort by date (newest first)
+        const sortedData = mappedOrders.sort((a, b) => 
+          b.createdAt.getTime() - a.createdAt.getTime()
+        );
+        setOrders(sortedData);
+      } else {
+        throw new Error(response.message || 'Failed to fetch orders');
+      }
     } catch (err) {
       setError(t('tryAgainError'));
       console.error('Error fetching orders:', err);
@@ -212,28 +236,48 @@ export function OrderHistoryScreen() {
     }
   };
 
-  const getStatusColor = (status: Order['status']) => {
-    switch (status) {
-      case 'Preparing':
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'preparing':
+      case 'ready':
         return 'bg-blue-100 text-blue-600';
-      case 'Pending':
+      case 'pending':
+      case 'order_sent':
         return 'bg-orange-100 text-orange-600';
-      case 'Completed':
-      case 'Delivered':
+      case 'completed':
+      case 'delivered':
         return 'bg-green-100 text-green-600';
-      case 'Cancelled':
+      case 'cancelled':
         return 'bg-red-100 text-red-600';
       default:
         return 'bg-gray-100 text-gray-600';
     }
   };
 
-  const getStatusText = (status: Order['status']) => {
-    return t(status.toLowerCase());
+  const getStatusText = (status: string) => {
+    const key = status.toLowerCase();
+    const translated = t(key);
+    if (translated === key) {
+      if (key === 'order_sent') return 'Order Sent';
+      if (key === 'ready') return 'Ready for Pickup';
+      return status.charAt(0).toUpperCase() + status.slice(1);
+    }
+    return translated;
+  };
+
+  const handleOrderDetails = (orderId: string, status: string) => {
+    router.push({
+      pathname: '/order-process/order-status/[orderId]',
+      params: { orderId, status }
+    });
   };
 
   const renderOrderItem = ({ item }: { item: Order }) => (
-    <View className="bg-white mx-4 mb-4 rounded-2xl p-4 shadow-sm border border-gray-100">
+    <TouchableOpacity 
+      onPress={() => handleOrderDetails(item.id, item.status)}
+      activeOpacity={0.7}
+      className="bg-white mx-4 mb-4 rounded-2xl p-4 shadow-sm border border-gray-100"
+    >
       {/* Header */}
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-1">
@@ -319,7 +363,7 @@ export function OrderHistoryScreen() {
           </TouchableOpacity>
         ) : null}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {

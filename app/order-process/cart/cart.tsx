@@ -65,7 +65,10 @@ export default function CartScreen() {
     }
     
     // Navigate to checkout screen
-    router.push('/order-process/checkout/checkout');
+    router.push({
+      pathname: '/order-process/checkout/checkout',
+      params: { branch_id: cart.branch_id }
+    });
   };
 
   return (

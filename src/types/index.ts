@@ -6,6 +6,12 @@ export interface User {
   phone: string;
   role: string;
   avatar: string | null;
+  branch?: {
+    id: string;
+    name: string;
+    restaurant_name: string;
+  };
+  permissions?: string[];
 }
 
 export interface AuthState {
@@ -24,6 +30,11 @@ export interface SendOTPRequest {
 export interface OTPLoginRequest {
   phone: string;
   otp_code: string;
+}
+
+export interface EmployeeLoginRequest {
+  username: string;
+  password?: string;
 }
 
 export interface ChangePhoneRequest {
@@ -79,6 +90,12 @@ export interface MenuItem {
   dietary_info: string[];
   modifier_groups: ModifierGroup[];
   image?: string; // Optional image field
+  photo?: string; // API returns "photo" instead of "image"
+  is_available?: boolean;
+  extra_prep_time?: number;
+  sort_order?: number;
+  category_id?: string;
+  category_name?: string;
 }
 
 export interface ModifierGroup {
@@ -154,13 +171,13 @@ export interface Car {
   id: string;
   car_model: string;
   plate_number: string;
-  car_color: string;
+  color: string;
 }
 
 export interface AddCarPayload {
   car_model: string;
   plate_number: string;
-  car_color: string;
+  color: string;
 }
 
 export interface CarResponse {

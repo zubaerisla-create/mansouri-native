@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 import ApiService from '../../services/api';
-import { AuthState, User, OTPLoginRequest, SendOTPRequest } from '../../types';
+import { AuthState, User, OTPLoginRequest, SendOTPRequest, EmployeeLoginRequest } from '../../types';
 
 const initialState: AuthState = {
   token: null,
@@ -32,13 +32,42 @@ export const otpLogin = createAsyncThunk(
       const apiResult = await ApiService.otpLogin(phone, otp_code);
       const innerData = apiResult.data;
       const token = innerData.tokens.access;
-      Alert.alert('DEBUG', `Token Received: ${token.substring(0, 20)}...`);
       await AsyncStorage.setItem('token', token);
       await AsyncStorage.setItem('user', JSON.stringify(innerData.user));
       ApiService.setToken(token);
       return innerData;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Login failed');
+    }
+  }
+);
+
+export const employeeLogin = createAsyncThunk(
+  'auth/employeeLogin',
+  async ({ username, password }: EmployeeLoginRequest, { rejectWithValue }) => {
+    try {
+      const apiResult = await ApiService.employeeLogin({ username, password });
+      const innerData = apiResult.data;
+      const token = innerData.tokens.access;
+      
+      console.log('✅ Employee Login API Success! Token Received:', token.substring(0, 20) + '...');
+      
+      const employeeUser = {
+        ...innerData.user,
+        role: 'employee',
+        branch: innerData.branch,
+        permissions: innerData.permissions,
+      };
+
+      await AsyncStorage.setItem('token', token);
+      await AsyncStorage.setItem('user', JSON.stringify(employeeUser));
+      ApiService.setToken(token);
+      
+      console.log('✅ Access Token successfully set in Async Storage & API Service!');
+      return { ...innerData, user: employeeUser };
+    } catch (error: any) {
+      console.log('❌ Employee Login API Failed:', error.response?.data || error.message);
+      return rejectWithValue(error.response?.data?.message || 'Employee Login failed');
     }
   }
 );
@@ -93,11 +122,19 @@ export const loadStoredAuth = createAsyncThunk(
         ApiService.setToken(token);
         
         try {
-          // Verify token by fetching profile
-          const profileResponse = await ApiService.getProfile();
-          const user = profileResponse.data || JSON.parse(userStr || '{}');
-          dispatch(setAuthenticated({ token, user }));
-          console.log('HYDRATION SUCCESS: Token validated');
+          const parsedUser = JSON.parse(userStr || '{}');
+          
+          // If the user is an employee, we don't fetch the customer profile
+          if (parsedUser.role === 'employee') {
+            dispatch(setAuthenticated({ token, user: parsedUser }));
+            console.log('HYDRATION SUCCESS: Employee token loaded');
+          } else {
+            // Verify token by fetching customer profile
+            const profileResponse = await ApiService.getProfile();
+            const user = profileResponse.data || parsedUser;
+            dispatch(setAuthenticated({ token, user }));
+            console.log('HYDRATION SUCCESS: Customer token validated');
+          }
         } catch (error) {
           console.warn('HYDRATION FAILURE: Token invalid or expired, clearing...', error);
           await AsyncStorage.removeItem('token');
@@ -154,6 +191,22 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(otpLogin.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      // Employee Login
+      .addCase(employeeLogin.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(employeeLogin.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.token = action.payload.tokens.access;
+        state.user = action.payload.user;
+        state.isAuthenticated = true;
+        state.error = null;
+      })
+      .addCase(employeeLogin.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       })

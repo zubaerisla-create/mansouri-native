@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from './useRedux';
 
 import { Alert } from 'react-native';
-import { getProfile, logoutUser, otpLogin, sendOTP, updateProfile } from '../features/auth/authSlice';
+import { getProfile, logoutUser, otpLogin, sendOTP, updateProfile, employeeLogin, clearError } from '../features/auth/authSlice';
 import { useRouter } from 'expo-router';
 import { changePhoneRequest, verifyNewPhone } from '../store/slices/customerSlice';
 
@@ -12,30 +12,49 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSendOTP = async (phone: string, purpose: 'login' | 'register' = 'login') => {
+  const handleSendOTP = async (phone: string, purpose: 'login' | 'register' = 'login', options = { showAlert: true }) => {
     setLoading(true);
     const result = await dispatch(sendOTP({ phone, purpose }));
     setLoading(false);
 
     if (sendOTP.fulfilled.match(result)) {
-      Alert.alert('Success', 'OTP sent successfully');
+      if (options.showAlert) Alert.alert('Success', 'OTP sent successfully');
       return true;
     } else {
-      Alert.alert('Error', result.payload as string);
+      if (options.showAlert) Alert.alert('Error', result.payload as string);
       return false;
     }
   };
 
-  const handleOTPLogin = async (phone: string, otp_code: string) => {
+  const handleOTPLogin = async (phone: string, otp_code: string, options = { showAlert: true }) => {
     setLoading(true);
     const result = await dispatch(otpLogin({ phone, otp_code }));
     setLoading(false);
 
     if (otpLogin.fulfilled.match(result)) {
-      Alert.alert('Success', 'Login successful');
+      if (options.showAlert) Alert.alert('Success', 'Login successful');
       return true;
     } else {
-      Alert.alert('Error', result.payload as string);
+      if (options.showAlert) Alert.alert('Error', result.payload as string);
+      return false;
+    }
+  };
+
+  const handleClearError = () => {
+    dispatch(clearError());
+  };
+
+  const handleEmployeeLogin = async (username: string, password?: string, options = { showAlert: true }) => {
+    setLoading(true);
+    const result = await dispatch(employeeLogin({ username, password }));
+    setLoading(false);
+
+    if (employeeLogin.fulfilled.match(result)) {
+      if (options.showAlert) Alert.alert('Success', 'Logged in successfully');
+      router.replace('/(tabs)/home'); // Force redirect to home page
+      return true;
+    } else {
+      if (options.showAlert) Alert.alert('Error', result.payload as string);
       return false;
     }
   };
@@ -100,10 +119,12 @@ export const useAuth = () => {
     error,
     sendOTP: handleSendOTP,
     otpLogin: handleOTPLogin,
+    employeeLogin: handleEmployeeLogin,
     updateProfile: handleUpdateProfile,
     changePhone: handleChangePhone,
     verifyNewPhone: handleVerifyNewPhone,
     logout: handleLogout,
     getProfile: handleGetProfile,
+    clearError: handleClearError,
   };
 };

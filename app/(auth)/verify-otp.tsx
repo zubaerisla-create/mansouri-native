@@ -29,7 +29,7 @@ export default function VerifyOtpScreen() {
   const router = useRouter();
   const { phoneNumber, formattedPhoneNumber } = useLocalSearchParams<{ phoneNumber: string, formattedPhoneNumber: string }>();
   const { t, isRTL } = useTranslation();
-  const { otpLogin, isLoading } = useAuth();
+  const { otpLogin, isLoading, error, clearError } = useAuth();
   const [code, setCode] = useState<string[]>(Array(CELL_COUNT).fill(''));
   const [timeLeft, setTimeLeft] = useState(54);
   const inputs = useRef<TextInput[]>([]);
@@ -51,6 +51,7 @@ export default function VerifyOtpScreen() {
     const newCode = [...code];
     newCode[index] = text;
     setCode(newCode);
+    if (error) clearError();
 
     if (text && index < CELL_COUNT - 1) {
       inputs.current[index + 1]?.focus();
@@ -154,6 +155,21 @@ export default function VerifyOtpScreen() {
             />
           ))}
         </View>
+        
+        {/* Error Message Display */}
+        {error && (
+          <Text 
+            style={{ 
+              color: '#EF4444', 
+              textAlign: 'center', 
+              marginBottom: responsiveSize(16),
+              fontSize: responsiveSize(14),
+              fontWeight: '500'
+            }}
+          >
+            {error}
+          </Text>
+        )}
 
         {/* Resend Button */}
         <TouchableOpacity
@@ -188,7 +204,7 @@ export default function VerifyOtpScreen() {
           onPress={async () => {
             if (isCodeComplete) {
               const otp_code = code.join('');
-              const success = await otpLogin(phoneNumber, otp_code);
+              const success = await otpLogin(phoneNumber, otp_code, { showAlert: false });
               if (success) {
                 router.push('/home');
               }
