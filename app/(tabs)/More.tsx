@@ -221,6 +221,22 @@ export default function ProfileScreen() {
               <Ionicons name={isRTL ? "chevron-back" : "chevron-forward"} size={20} color="#9ca3af" />
             </TouchableOpacity>
           </Link>
+
+          {/* QR Scanner (New) */}
+          <Link href="/order-process/scanner/scanner" asChild>
+            <TouchableOpacity style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <Ionicons
+                  name="qr-code-outline"
+                  size={22}
+                  color="#FF5101"
+                  style={styles.settingIcon}
+                />
+                <Text style={styles.settingLabel}>Scan QR Code</Text>
+              </View>
+              <Ionicons name={isRTL ? "chevron-back" : "chevron-forward"} size={20} color="#9ca3af" />
+            </TouchableOpacity>
+          </Link>
         </View>
 
         {/* Logout */}

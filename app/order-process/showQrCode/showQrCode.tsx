@@ -1,4 +1,4 @@
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import {
   View,
@@ -10,16 +10,21 @@ import {
   Image,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import api from '@/src/services/api';
+import { useAppSelector } from '@/src/hooks/useRedux';
 
 const OrderConfirmationScreen = () => {
-  const orderId = 'PEPEEEP-ORDER-12345';
-  const qrValue = 'PEPEEEP-ORDER-12345';
-  const { width, height } = useWindowDimensions();
+  const params = useLocalSearchParams<{ orderId: string; orderNumber?: string }>();
+  const orderId = params.orderId || 'PEPEEEP-ORDER-12345';
+  const { token } = useAppSelector((state) => state.auth);
+  
+  const qrImageUrl = api.getOrderQrUrl(orderId);
+  const { width } = useWindowDimensions();
   
   // Responsive calculations
   const isSmallScreen = width < 375;
   const isLargeScreen = width > 768;
-  const qrSize = isSmallScreen ? 180 : isLargeScreen ? 260 : 220;
+  const qrSize = isSmallScreen ? 200 : isLargeScreen ? 280 : 240;
 
   return (
     <SafeAreaView className="flex-1 bg-white">
@@ -27,7 +32,7 @@ const OrderConfirmationScreen = () => {
 
       <View className="flex-1 px-6 items-center">
         {/* Image above the title */}
-        <View className="mt-24 mb-8 bg-yellow-100 p-4 rounded-full ">
+        <View className="mt-20 mb-6 bg-yellow-100 p-4 rounded-full ">
           <Image
             source={{ uri: 'https://i.ibb.co.com/M5ghD7FB/Icon.png' }}
             className="w-12 h-12"
@@ -40,11 +45,11 @@ const OrderConfirmationScreen = () => {
           Show this to staff
         </Text>
         
-        <Text className="text-base text-gray-600 mb-9 text-center">
+        <Text className="text-base text-gray-600 mb-8 text-center">
           Staff can scan code or you can confirm receipt manually
         </Text>
 
-        {/* QR Code with orange rounded border */}
+        {/* QR Code Generated Locally from orderId */}
         <View className="items-center mb-8">
           <View 
             className="p-4 bg-white rounded-3xl border-4 border-orange-500 shadow-lg"
@@ -57,25 +62,24 @@ const OrderConfirmationScreen = () => {
             }}
           >
             <QRCode
-              value={qrValue}
+              value={orderId}
               size={qrSize}
               color="black"
               backgroundColor="white"
-              logoSize={50}
             />
           </View>
         </View>
 
-        {/* Order ID */}
+        {/* Order Number */}
         <View className="items-center mb-7">
-          <Text className="text-sm text-gray-500 mb-1">Order ID</Text>
+          <Text className="text-sm text-gray-500 mb-1">Order Number</Text>
           <Text className="text-xl font-bold text-black tracking-tight">
-            {orderId}
+            {params.orderNumber || orderId}
           </Text>
         </View>
 
         {/* Instruction text */}
-        <Text className="text-base text-gray-700 mb-10 text-center leading-6 px-3">
+        <Text className="text-base text-gray-700 mb-8 text-center leading-6 px-3">
           When staff arrives at your car, show this code or tap "I Received the Order"
           after getting your food
         </Text>
@@ -91,10 +95,9 @@ const OrderConfirmationScreen = () => {
             shadowRadius: 8,
             elevation: 6,
           }}
+          onPress={() => router.push('/order-process/feedback/feedback')}
         >
-          <Link href="/order-process/feedback/feedback" asChild>
-            <Text className="text-white text-lg font-bold">✓ I Received the Order</Text>
-          </Link>
+          <Text className="text-white text-lg font-bold">✓ I Received the Order</Text>
         </TouchableOpacity>
 
         {/* Back link */}
@@ -109,4 +112,4 @@ const OrderConfirmationScreen = () => {
   );
 };
 
-export default OrderConfirmationScreen;
+export default OrderConfirmationScreen;

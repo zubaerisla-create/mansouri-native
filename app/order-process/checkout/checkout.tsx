@@ -36,61 +36,48 @@ export default function CheckoutScreen() {
   const [selectedPickupTime, setSelectedPickupTime] = useState<PickupTime>('30');
   const [customTime, setCustomTime] = useState('');
   const [selectedCar, setSelectedCar] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [walletBalance, setWalletBalance] = useState(150.75); // Example balance
 
   const [loading, setLoading] = useState(false);
   const [initiateLoading, setInitiateLoading] = useState(false);
-  const [showCardForm, setShowCardForm] = useState(false);
   const [cardData, setCardData] = useState<CardData | null>(null);
   const [summary, setSummary] = useState<any>(null);
   const [stripeIntentId, setStripeIntentId] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderNote, setOrderNote] = useState('');
 
-  const { confirmPayment } = useStripe();
+  const { confirmPayment, retrievePaymentIntent } = useStripe();
 
   // Fetch cars on mount
   useEffect(() => {
     dispatch(fetchCars());
   }, []);
 
-  // Set default car if available and none selected
-  useEffect(() => {
-    if (cars.length > 0 && !selectedCar) {
-      setSelectedCar(cars[0].id);
-    }
-  }, [cars]);
 
   // Initiate checkout to get summary (for non-card methods or when card details are updated)
   useEffect(() => {
     if (params.branch_id && paymentMethod) {
-      // If card is selected but we don't have an intent yet, let handlePaymentMethodSelect handle it
-      if (paymentMethod === 'card' && !stripeIntentId) return;
+      // Card payments are initialized manually to avoid duplicate Stripe intent creation.
+      if (paymentMethod === 'card') return;
 
       setInitiateLoading(true);
 
-      // Map 'card' UI selection to 'stripe' API payment method
-      const apiPaymentMethod = paymentMethod === 'card' ? 'stripe' : paymentMethod;
+      const apiPaymentMethod = paymentMethod;
 
       const payload: any = {
         branch_id: params.branch_id as string,
         payment_method: apiPaymentMethod,
       };
 
-      // No need to send card details in initiate when confirming on client
-      if (apiPaymentMethod === 'stripe' && cardData) {
-        // Stripe confirmation is handled separately
-      }
-
       api.initiateCheckout(payload)
         .then((res: any) => {
-          if (res.success && res.data?.summary) {
-            setSummary(res.data.summary);
-            // Store stripe_intent_id if returned for stripe (UI 'card')
-            if (apiPaymentMethod === 'stripe' && res.data.stripe_intent_id) {
-              setStripeIntentId(res.data.stripe_intent_id);
+          const checkoutData = res.data?.data || res.data || {};
+          if (res.success && checkoutData.summary) {
+            setSummary(checkoutData.summary);
+            if (apiPaymentMethod === 'stripe' && checkoutData.stripe_intent_id) {
+              setStripeIntentId(checkoutData.stripe_intent_id);
             }
           }
         })
@@ -102,7 +89,7 @@ export default function CheckoutScreen() {
         })
         .finally(() => setInitiateLoading(false));
     }
-  }, [params.branch_id, paymentMethod, cardData]);
+  }, [params.branch_id, paymentMethod]);
 
   // Calculate totals
   const subtotal = summary ? parseFloat(summary.subtotal) : getTotalPrice();
@@ -137,7 +124,7 @@ export default function CheckoutScreen() {
         backgroundColor: "#050202"
       },
       {
-        id: 'card',
+        id: 'stripe',
         title: 'Credit/Debit Card',
         description: 'Visa, Mastercard, Stripe',
         icon: 'credit-card',
@@ -154,7 +141,7 @@ export default function CheckoutScreen() {
       },
     ];
 
-  const validateInputs = () => {
+  const validateInputs = (effectiveCardData?: CardData | null) => {
     if (!selectedCar) {
       Alert.alert('Car Required', 'Please select or add a car for curbside pickup');
       return false;
@@ -172,12 +159,12 @@ export default function CheckoutScreen() {
     }
 
     // Check if card details are filled when card payment is selected
-    if (paymentMethod === 'card' && !cardData) {
-      Alert.alert('Card Required', 'Please add card details to proceed');
+    if (paymentMethod === 'stripe' && (!effectiveCardData || !effectiveCardData.complete)) {
+      Alert.alert('Incomplete Card Details', 'Please enter all required card information to proceed');
       return false;
     }
 
-    if (paymentMethod === 'card' && !stripeIntentId) {
+    if (paymentMethod === 'stripe' && !stripeIntentId) {
       Alert.alert('Payment Error', 'Failed to initialize Stripe payment. Please try again.');
       return false;
     }
@@ -192,8 +179,10 @@ export default function CheckoutScreen() {
     return true;
   };
 
-  const processPayment = async () => {
-    if (!validateInputs()) {
+  const processPayment = async (confirmedCardData?: CardData) => {
+    const effectiveCardData = confirmedCardData || cardData;
+
+    if (!validateInputs(effectiveCardData)) {
       return;
     }
 
@@ -215,14 +204,38 @@ export default function CheckoutScreen() {
         return;
       }
 
-      const apiPaymentMethod = paymentMethod === 'card' ? 'stripe' : paymentMethod;
+      const apiPaymentMethod = paymentMethod === 'stripe' ? 'stripe' : paymentMethod;
 
-      // If Stripe payment, we now confirm it inside the CardPaymentForm
-      // so we just check if we have the cardData (which now means payment is confirmed)
-      if (apiPaymentMethod === 'stripe' && !cardData) {
-        Alert.alert('Payment Required', 'Please complete the card payment first.');
-        setLoading(false);
-        return;
+      if (apiPaymentMethod === 'stripe') {
+        if (!effectiveCardData || !effectiveCardData.complete) {
+          Alert.alert('Payment Required', 'Please complete the card payment details.');
+          setLoading(false);
+          return;
+        }
+
+        if (!clientSecret) {
+          Alert.alert('Error', 'Payment session not initialized. Please try again.');
+          setLoading(false);
+          return;
+        }
+
+        console.log('💳 Confirming Stripe payment intent...');
+        const { error, paymentIntent } = await confirmPayment(clientSecret, {
+          paymentMethodType: 'Card',
+        });
+
+        if (error) {
+          console.error('Stripe Error:', error);
+          Alert.alert('Payment Failed', error.message);
+          setLoading(false);
+          return;
+        }
+
+        if (!(paymentIntent?.status === 'Succeeded' || paymentIntent?.status === 'RequiresCapture')) {
+          Alert.alert('Payment Status', `Payment is ${paymentIntent?.status}. Please try again.`);
+          setLoading(false);
+          return;
+        }
       }
 
       const response = await api.confirmCheckout({
@@ -234,17 +247,21 @@ export default function CheckoutScreen() {
         stripe_intent_id: apiPaymentMethod === 'stripe' ? (stripeIntentId || undefined) : undefined,
       });
 
-      if (response.success) {
-        console.log('Order placed:', response.data);
+      const confirmedResponseData = response.data?.data || response.data || {};
+      const orderId = confirmedResponseData.id || confirmedResponseData.order_id;
+      const orderNumber = confirmedResponseData.order_number;
 
-        // Clear cart first
+      if (response.success && orderId) {
+        console.log('Order placed:', confirmedResponseData);
+
         clearCart();
 
-        // Navigate to order status page
         router.replace({
           pathname: '/order-process/order-status/[orderId]',
-          params: { orderId: response.data.id }
+          params: { orderId, orderNumber }
         });
+      } else if (response.success) {
+        Alert.alert('Error', 'Order placed but order id was missing from the response.');
       } else {
         Alert.alert('Error', response.message || 'Failed to place order');
       }
@@ -281,8 +298,8 @@ export default function CheckoutScreen() {
 
   // Handle payment method selection (toggle behavior)
   const handlePaymentMethodSelect = async (methodId: PaymentMethod) => {
-    // If selecting card payment, first initiate checkout to get stripe_intent_id
-    if (methodId === 'card') {
+    // If selecting stripe payment, first initiate checkout to get stripe_intent_id
+    if (methodId === 'stripe') {
       if (!params.branch_id) {
         Alert.alert('Error', 'Branch ID is missing');
         return;
@@ -292,18 +309,31 @@ export default function CheckoutScreen() {
       try {
         const payload = {
           branch_id: params.branch_id as string,
-          payment_method: 'stripe', // Use 'stripe' for API
+          payment_method: 'stripe',
         };
 
         const res = await api.initiateCheckout(payload);
+        const checkoutData = res.data?.data || res.data || {};
 
-        if (res.success && res.data?.stripe_intent_id) {
-          setStripeIntentId(res.data.stripe_intent_id);
-          setClientSecret(res.data.client_secret);
-          if (res.data.summary) setSummary(res.data.summary);
+        if (res.success && checkoutData.stripe_intent_id) {
+          setStripeIntentId(checkoutData.stripe_intent_id);
+          // Retrieve the PaymentIntent to get client_secret
+          const { paymentIntent, error } = await retrievePaymentIntent(checkoutData.stripe_intent_id);
+          if (error) {
+            console.error('Retrieve PaymentIntent error:', error);
+            Alert.alert('Error', 'Failed to retrieve payment details');
+            return;
+          }
+          if (paymentIntent?.clientSecret) {
+            setClientSecret(paymentIntent.clientSecret);
+          } else {
+            Alert.alert('Error', 'Payment session not available');
+            return;
+          }
+          if (checkoutData.summary) setSummary(checkoutData.summary);
 
-          setPaymentMethod('card');
-          setShowCardForm(true); // Now show the card form
+          setPaymentMethod('stripe');
+          setCardData(null); // Reset card data for new selection
         } else {
           Alert.alert('Error', res.message || 'Failed to initialize payment');
         }
@@ -319,57 +349,19 @@ export default function CheckoutScreen() {
     // If wallet toggle is on and user selects a non-wallet method,
     // that means they want to pay the remaining amount with that method
     if (useWalletBalance && methodId !== 'wallet') {
-      // Set payment method to the selected non-wallet method
       setPaymentMethod(methodId);
     } else if (useWalletBalance && methodId === 'wallet') {
-      // If wallet is already selected, toggle it off
       if (paymentMethod === 'wallet') {
         setPaymentMethod(null);
       } else {
         setPaymentMethod('wallet');
       }
     } else {
-      // Normal toggle behavior when wallet toggle is off
       if (paymentMethod === methodId) {
         setPaymentMethod(null);
       } else {
         setPaymentMethod(methodId);
       }
-    }
-  };
-
-  // Handle card payment confirmation from modal
-  const handleCardPaymentConfirm = async (data: CardData) => {
-    if (!clientSecret) {
-      Alert.alert('Error', 'Payment session not initialized. Please try again.');
-      return;
-    }
-
-    setInitiateLoading(true);
-    try {
-      console.log('💳 Confirming Stripe payment intent...');
-      const { error, paymentIntent } = await confirmPayment(clientSecret, {
-        paymentMethodType: 'Card',
-      });
-
-      if (error) {
-        console.error('Stripe Error:', error);
-        Alert.alert('Payment Failed', error.message);
-        return;
-      }
-
-      if (paymentIntent?.status === 'Succeeded' || paymentIntent?.status === 'RequiresCapture') {
-        setCardData(data);
-        setShowCardForm(false);
-        Alert.alert('Payment Successful', 'Your payment has been confirmed. Tap "Confirm Order" to complete.');
-      } else {
-        Alert.alert('Payment Status', `Payment is ${paymentIntent?.status}. Please try again.`);
-      }
-    } catch (err: any) {
-      console.error('Stripe Confirm Error:', err);
-      Alert.alert('Error', 'An unexpected error occurred during payment confirmation.');
-    } finally {
-      setInitiateLoading(false);
     }
   };
 
@@ -582,56 +574,59 @@ export default function CheckoutScreen() {
           </View>
 
           {/* Payment Methods List - Always show all payment options */}
-          <View className="space-y-3 mt-6">
+          <View className="mt-6">
             {paymentMethods.map((method) => (
               <TouchableOpacity
                 key={method.id}
                 onPress={() => handlePaymentMethodSelect(method.id)}
-                className={`flex-row items-center p-4 rounded-xl border-2 ${isPaymentMethodSelected(method.id)
+                className={`p-4 rounded-xl border-2 mb-3 ${isPaymentMethodSelected(method.id)
                   ? 'bg-orange-50 border-orange-500'
                   : 'border-gray-200 bg-white'
                   } ${useWalletBalance && method.id === 'wallet' ? 'opacity-100' : ''}`}
               >
-                <View className={`w-6 h-6 rounded-full border-2 mr-4 items-center justify-center ${isPaymentMethodSelected(method.id)
-                  ? 'bg-orange-500 border-orange-500'
-                  : 'border-gray-400'
-                  }`}>
-                  {isPaymentMethodSelected(method.id) && (
-                    <Feather name="check" size={14} color="white" />
-                  )}
+                <View className="flex-row items-center">
+                  <View className={`w-6 h-6 rounded-full border-2 mr-4 items-center justify-center ${isPaymentMethodSelected(method.id)
+                    ? 'bg-orange-500 border-orange-500'
+                    : 'border-gray-400'
+                    }`}>
+                    {isPaymentMethodSelected(method.id) && (
+                      <Feather name="check" size={14} color="white" />
+                    )}
+                  </View>
+
+                  <View className="flex-1">
+                    <Text className="text-lg font-semibold text-gray-900">
+                      {method.title}
+                    </Text>
+                    <Text className="text-gray-600 text-sm mt-1">
+                      {method.description}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      backgroundColor: method.backgroundColor,
+                      padding: 10,
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Feather
+                      name={method.icon as any}
+                      size={20}
+                      color={method.iconColor}
+                    />
+                  </View>
                 </View>
 
-                <View className="flex-1">
-                  <Text className="text-lg font-semibold text-gray-900">
-                    {method.title}
-                  </Text>
-                  <Text className="text-gray-600 text-sm mt-1">
-                    {method.description}
-                  </Text>
-
-                  {/* Show card details if saved */}
-                  {method.id === 'card' && cardData && (
-                    <View className="mt-3 pt-3 border-t border-gray-300">
-                      <Text className="text-gray-700 text-sm font-medium">
-                        Card: •••• {cardData.last4 || '****'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                <View
-                  style={{
-                    backgroundColor: method.backgroundColor,
-                    padding: 10,
-                    borderRadius: 12,
-                  }}
-                >
-                  <Feather
-                    name={method.icon as any}
-                    size={20}
-                    color={method.iconColor}
-                  />
-                </View>
+                {/* Dropdown Card Form */}
+                {method.id === 'stripe' && isPaymentMethodSelected('stripe') && (
+                  <View className="mt-4 pt-4 border-t border-gray-100">
+                    <CardPaymentForm
+                      isInline
+                      onCardChange={(data) => setCardData(data)}
+                    />
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -721,7 +716,7 @@ export default function CheckoutScreen() {
       {/* Confirm Payment Button */}
       <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-5">
         <TouchableOpacity
-          onPress={processPayment}
+          onPress={() => processPayment()}
           disabled={loading || !selectedCar}
           className={`py-4 rounded-xl items-center shadow-lg ${loading || !selectedCar ? 'bg-orange-400' : 'bg-orange-600'}`}
           activeOpacity={0.8}
@@ -741,12 +736,6 @@ export default function CheckoutScreen() {
         )}
       </View>
 
-      {/* Card Payment Form Modal */}
-      <CardPaymentForm
-        visible={showCardForm}
-        onClose={() => setShowCardForm(false)}
-        onConfirm={handleCardPaymentConfirm}
-      />
     </SafeAreaView>
   );
 }

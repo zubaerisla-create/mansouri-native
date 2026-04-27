@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 
 interface CardPaymentFormProps {
-  visible: boolean;
-  onClose: () => void;
-  onConfirm: (cardData: CardData) => void;
+  visible?: boolean;
+  onClose?: () => void;
+  onConfirm?: (cardData: CardData) => void;
+  isInline?: boolean;
+  onCardChange?: (cardData: CardData | null) => void;
 }
 
 export interface CardData {
@@ -26,9 +28,11 @@ export interface CardData {
 }
 
 export default function CardPaymentForm({
-  visible,
-  onClose,
-  onConfirm,
+  visible = false,
+  onClose = () => { },
+  onConfirm = () => { },
+  isInline = false,
+  onCardChange,
 }: CardPaymentFormProps) {
   const [cardDetails, setCardDetails] = useState<CardFieldInput.Details | null>(null);
 
@@ -51,30 +55,26 @@ export default function CardPaymentForm({
     onClose();
   };
 
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <View className="flex-1 bg-black/50">
-        <View className="flex-1 bg-white rounded-t-3xl mt-auto">
-          {/* Header */}
-          <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-200">
-            <Text className="text-2xl font-bold text-gray-900">
-              Add Card Details
-            </Text>
-            <TouchableOpacity onPress={handleClose}>
-              <Feather name="x" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
+  const renderContent = () => (
+    <View className={`${isInline ? 'bg-transparent' : 'flex-1 bg-white rounded-t-3xl mt-auto'}`}>
+      {/* Header - Only for Modal */}
+      {!isInline && (
+        <View className="flex-row items-center justify-between px-5 py-4 border-b border-gray-200">
+          <Text className="text-2xl font-bold text-gray-900">
+            Add Card Details
+          </Text>
+          <TouchableOpacity onPress={handleClose}>
+            <Feather name="x" size={24} color="#000" />
+          </TouchableOpacity>
+        </View>
+      )}
 
-          <ScrollView
-            className="flex-1"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20 }}
-          >
+      <ScrollView
+        className={`${isInline ? '' : 'flex-1'}`}
+        scrollEnabled={!isInline}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: isInline ? 10 : 20 }}
+      >
               {/* Card Preview */}
               <View className="px-5 py-6">
                 <View className="rounded-2xl p-6 mb-6"
@@ -141,6 +141,15 @@ export default function CardPaymentForm({
                     }}
                     onCardChange={(details) => {
                       setCardDetails(details);
+                      if (onCardChange) {
+                        onCardChange(details.complete ? {
+                          brand: details.brand,
+                          complete: details.complete,
+                          last4: details.last4,
+                          expiryMonth: details.expiryMonth,
+                          expiryYear: details.expiryYear,
+                        } : null);
+                      }
                     }}
                   />
                 </View>
@@ -156,20 +165,37 @@ export default function CardPaymentForm({
                 </View>
               </View>
           </ScrollView>
-
-          {/* Confirm Button */}
-          <View className="px-5 pb-5 border-t border-gray-200">
-            <TouchableOpacity
-              onPress={handleConfirm}
-              className="bg-orange-600 py-4 rounded-lg items-center mt-4"
-              activeOpacity={0.8}
-            >
-              <Text className="text-white text-lg font-bold">
-                Confirm Card Details
-              </Text>
-            </TouchableOpacity>
-          </View>
+          
+          {/* Confirm Button - Only for Modal */}
+          {!isInline && (
+            <View className="px-5 pb-5 border-t border-gray-200">
+              <TouchableOpacity
+                onPress={handleConfirm}
+                className="bg-orange-600 py-4 rounded-lg items-center mt-4"
+                activeOpacity={0.8}
+              >
+                <Text className="text-white text-lg font-bold">
+                  Confirm Card Details
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
+  );
+
+  if (isInline) {
+    return renderContent();
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={handleClose}
+    >
+      <View className="flex-1 bg-black/50">
+        {renderContent()}
       </View>
     </Modal>
   );

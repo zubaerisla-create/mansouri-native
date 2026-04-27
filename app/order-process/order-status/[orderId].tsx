@@ -38,8 +38,9 @@ interface Order {
 
 export default function OrderTrackingScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ orderId: string; fromFeedback?: string; status?: string }>();
+  const params = useLocalSearchParams<{ orderId: string; orderNumber?: string; fromFeedback?: string; status?: string }>();
   const orderId = params.orderId || 'ORD-20260119-7842';
+  const orderNumber = params.orderNumber || orderId;
   const fromFeedback = params.fromFeedback === 'true';
   const initialStatusParam = params.status?.toLowerCase();
   const { clearCart } = useCart();
@@ -626,7 +627,7 @@ export default function OrderTrackingScreen() {
           )}
 
           {isPreparing && (
-            <Link href="/order-process/showQrCode/showQrCode" asChild>
+            <Link href={{ pathname: "/order-process/showQrCode/showQrCode", params: { orderId: orderId, orderNumber: orderNumber } }} asChild>
               <TouchableOpacity
                 className="bg-orange-600 rounded-xl items-center shadow-md mb-4"
                 style={{
@@ -655,7 +656,7 @@ export default function OrderTrackingScreen() {
                 <Feather name="radio" size={responsiveFontSize(24)} color="white" />
               </TouchableOpacity>
 
-              <Link href="/order-process/showQrCode/showQrCode" asChild>
+              <Link href={{ pathname: "/order-process/showQrCode/showQrCode", params: { orderId: orderId, orderNumber: orderNumber } }} asChild>
                 <TouchableOpacity
                   className="bg-green-600 rounded-xl items-center shadow-md mb-4"
                   style={{

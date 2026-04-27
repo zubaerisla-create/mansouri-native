@@ -375,12 +375,13 @@ class ApiService {
     };
   }) {
     try {
-      // Validate payment_method is a string
       if (typeof payload.payment_method !== 'string') {
         throw new ApiError(400, 'payment_method must be a string');
       }
 
+      console.log('🚀 initiateCheckout Payload:', JSON.stringify(payload, null, 2));
       const response = await this.api.post('/api/v1/checkout/initiate/', payload);
+      
       console.log('✅ initiateCheckout Response:', JSON.stringify(response.data, null, 2));
 
       if (!response.data || response.data.success === false) {
@@ -396,13 +397,19 @@ class ApiService {
 
       const status = error.response?.status;
       const apiMessage = error.response?.data?.message;
+      const apiErrors = error.response?.data?.errors;
+      
       let message = apiMessage || 'Failed to initiate checkout';
+
+      console.error(`🔴 initiateCheckout Error [${status}]:`, message);
+      if (apiErrors) {
+        console.log('🔴🔴🔴 DETAILED API ERRORS:', JSON.stringify(apiErrors));
+      }
 
       if (status === 402) {
         message = 'Payment initialization failed. Please check your card details.';
       }
 
-      console.error(`initiateCheckout Error [${status}]:`, message, error.config?.url);
       throw new ApiError(status, message, error);
     }
   }
@@ -421,18 +428,6 @@ class ApiService {
     stripe_intent_id?: string;
   }) {
     try {
-      // Validate all required fields
-      if (!payload.branch_id || !payload.payment_method || !payload.car_id) {
-        throw new ApiError(400, 'branch_id, payment_method, and car_id are required');
-      }
-
-      if (typeof payload.payment_method !== 'string') {
-        throw new ApiError(400, 'payment_method must be a string');
-      }
-
-      console.log('🚀 confirmCheckout Payload (Original):', JSON.stringify(payload, null, 2));
-
-      // Prepare final payload with transformed card details if needed
       const finalPayload: any = { ...payload };
 
       if (payload.card_details && payload.card_details.expiry) {
@@ -442,12 +437,12 @@ class ApiService {
           number: payload.card_details.number,
           exp_month: parseInt(month, 10),
           exp_year: parseInt(year, 10),
-          cvc: payload.card_details.cvv, // Stripe often expects 'cvc'
-          expiry: payload.card_details.expiry // Keep original too just in case
+          cvc: payload.card_details.cvv,
+          expiry: payload.card_details.expiry
         };
       }
 
-      console.log('🚀 confirmCheckout Final Payload:', JSON.stringify(finalPayload, null, 2));
+      console.log('🚀 confirmCheckout Payload:', JSON.stringify(finalPayload, null, 2));
       const response = await this.api.post('/api/v1/checkout/confirm/', finalPayload);
 
       if (!response.data || response.data.success === false) {
@@ -463,13 +458,19 @@ class ApiService {
 
       const status = error.response?.status;
       const apiMessage = error.response?.data?.message;
+      const apiErrors = error.response?.data?.errors;
+      
       let message = apiMessage || 'Failed to confirm order';
+
+      console.error(`🔴 confirmCheckout Error [${status}]:`, message);
+      if (apiErrors) {
+        console.log('🔴🔴🔴 DETAILED API ERRORS (Confirm):', JSON.stringify(apiErrors));
+      }
 
       if (status === 402) {
         message = 'Payment failed. Please check your card or use a different method.';
       }
 
-      console.error(`confirmCheckout Error [${status}]:`, message, error.config?.url);
       throw new ApiError(status, message, error);
     }
   }
@@ -479,6 +480,10 @@ class ApiService {
   async getOrders(): Promise<any> {
     const response = await this.api.get('/api/v1/orders/');
     return response.data;
+  }
+
+  getOrderQrUrl(orderId: string): string {
+    return `${this.localUrl}/api/v1/orders/${orderId}/qr/`;
   }
 }
 
