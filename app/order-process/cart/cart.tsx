@@ -1,23 +1,26 @@
-import React, { useEffect } from 'react';
+import { useCart } from '@/src/hooks/useCart';
+import api from '@/src/services/api';
+import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  TextInput,
-  Alert,
   ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { useCart } from '@/src/hooks/useCart';
-import { useRouter } from 'expo-router';
 
 export default function CartScreen() {
   const { cart, isLoading, fetchCart, updateQuantity, removeItem, clearCart, getTotalItems } = useCart();
   const router = useRouter();
-  
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
   useEffect(() => {
     fetchCart();
   }, []);
@@ -32,8 +35,8 @@ export default function CartScreen() {
       `Remove ${itemName} from cart?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Remove', 
+        {
+          text: 'Remove',
           style: 'destructive',
           onPress: () => removeItem(cartItemId)
         },
@@ -43,14 +46,14 @@ export default function CartScreen() {
 
   const handleClearCart = () => {
     if (!cart || !cart.items || cart.items.length === 0) return;
-    
+
     Alert.alert(
       'Clear Cart',
       'Remove all items from cart?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear', 
+        {
+          text: 'Clear',
           style: 'destructive',
           onPress: () => clearCart()
         },
@@ -58,17 +61,55 @@ export default function CartScreen() {
     );
   };
 
-  const handleProceedToCheckout = () => {
+  const handleProceedToCheckout = async () => {
     if (!cart || !cart.items || cart.items.length === 0) {
       Alert.alert('Cart Empty', 'Please add items to cart first');
       return;
     }
-    
-    // Navigate to checkout screen
-    router.push({
-      pathname: '/order-process/checkout/checkout',
-      params: { branch_id: cart.branch_id }
-    });
+
+    if (!cart.branch_id) {
+      Alert.alert('Error', 'Branch information is missing from your cart.');
+      return;
+    }
+
+    setCheckoutLoading(true);
+    try {
+      // Call initiate checkout API with stripe payment method
+      const res = await api.initiateCheckout({
+        branch_id: cart.branch_id,
+        payment_method: 'stripe',
+      });
+
+      console.log("res stripe client secret: ", res);
+
+      const checkoutData = res.data?.data || res.data || {};
+      const clientSecret: string | undefined = checkoutData.client_secret;
+      const stripeIntentId: string | undefined = checkoutData.stripe_intent_id;
+
+      // Persist client_secret to AsyncStorage
+      if (clientSecret) {
+        await AsyncStorage.setItem('stripe_client_secret', clientSecret);
+        console.log('✅ stripe client_secret stored in AsyncStorage');
+      }
+
+      // Navigate to checkout screen with stripe intent data
+      router.push({
+        pathname: '/order-process/checkout/checkout',
+        params: {
+          branch_id: cart.branch_id,
+          client_secret: clientSecret ?? '',
+          stripe_intent_id: stripeIntentId ?? '',
+        },
+      });
+    } catch (error: any) {
+      console.error('❌ Initiate checkout failed:', error);
+      Alert.alert(
+        'Checkout Error',
+        error.message || 'Failed to initialize checkout. Please try again.'
+      );
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   return (
@@ -102,13 +143,13 @@ export default function CartScreen() {
         </View>
       ) : (
         <>
-          <ScrollView 
+          <ScrollView
             className="flex-1"
             showsVerticalScrollIndicator={false}
           >
             <View className="p-5">
               {cart.items.map((item, index) => (
-                <View 
+                <View
                   key={item.cart_item_id}
                   className={`bg-white rounded-xl p-4 mb-4 border border-gray-100 shadow-sm ${index === (cart.items?.length || 0) - 1 ? 'mb-6' : ''}`}
                 >
@@ -119,7 +160,7 @@ export default function CartScreen() {
                       className="w-20 h-20 rounded-lg mr-4"
                       resizeMode="cover"
                     />
-                    
+
                     {/* Item Details */}
                     <View className="flex-1">
                       <View className="flex-row justify-between">
@@ -133,7 +174,7 @@ export default function CartScreen() {
                           <Feather name="x" size={20} color="#999" />
                         </TouchableOpacity>
                       </View>
-                      
+
                       {/* Item Customizations */}
                       <View className="mt-1">
                         {item.selected_options.map((opt) => (
@@ -142,16 +183,16 @@ export default function CartScreen() {
                           </Text>
                         ))}
                       </View>
-                      
+
                       {/* Price and Quantity */}
                       <View className="flex-row items-center justify-between mt-3">
                         <Text className="text-lg font-bold text-gray-900">
                           {parseFloat(item.item_price).toFixed(2)} SAR
                         </Text>
-                        
+
                         {/* Quantity Controls */}
                         <View className="flex-row items-center bg-gray-100 rounded-full px-3 py-1">
-                          <TouchableOpacity 
+                          <TouchableOpacity
                             onPress={() => updateQuantity(item.cart_item_id, item.quantity - 1)}
                             className="px-2"
                           >
@@ -160,7 +201,7 @@ export default function CartScreen() {
                           <Text className="text-base font-bold mx-4 min-w-[20px] text-center">
                             {item.quantity}
                           </Text>
-                          <TouchableOpacity 
+                          <TouchableOpacity
                             onPress={() => updateQuantity(item.cart_item_id, item.quantity + 1)}
                             className="px-2"
                           >
@@ -168,7 +209,7 @@ export default function CartScreen() {
                           </TouchableOpacity>
                         </View>
                       </View>
-                      
+
                       {/* Item Total */}
                       <View className="mt-2 pt-2 border-t border-gray-100">
                         <Text className="text-right text-gray-700">
@@ -197,8 +238,8 @@ export default function CartScreen() {
             <View className="px-5 pb-32">
               <Text className="text-lg font-semibold text-gray-900 mb-4">Order Summary</Text>
               <View className="bg-gray-50 rounded-xl p-4">
-              
-                
+
+
                 {/* Order Breakdown */}
                 <View className="mt-2">
                   <View className="flex-row justify-between mb-1">
@@ -206,19 +247,19 @@ export default function CartScreen() {
                     <Text className="text-gray-900 text-sm">{subtotal.toFixed(2)} SAR</Text>
                   </View>
                 </View>
-                
+
                 {/* Totals */}
                 <View className="mt-4 pt-3 border-t border-gray-200">
                   <View className="flex-row justify-between mb-2">
                     <Text className="text-gray-600">Subtotal</Text>
                     <Text className="text-gray-900 font-medium">{subtotal.toFixed(2)} SAR</Text>
                   </View>
-                  
+
                   <View className="flex-row justify-between mb-2">
                     <Text className="text-gray-600">Service Fee</Text>
                     <Text className="text-gray-900 font-medium">{serviceFee.toFixed(2)} SAR</Text>
                   </View>
-                  
+
                   <View className="flex-row justify-between mt-3 pt-3 border-t border-gray-300">
                     <Text className="text-lg font-bold text-gray-900">Total</Text>
                     <Text className="text-lg font-bold text-orange-600">{total.toFixed(2)} SAR</Text>
@@ -232,13 +273,19 @@ export default function CartScreen() {
           <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-5">
             <TouchableOpacity
               onPress={handleProceedToCheckout}
-              className="bg-orange-600 py-4 rounded-xl items-center shadow-lg"
+              disabled={checkoutLoading}
+              className={`py-4 rounded-xl items-center shadow-lg ${checkoutLoading ? 'bg-orange-400' : 'bg-orange-600'
+                }`}
             >
-              <Text className="text-white text-xl font-bold">
-                Proceed to Checkout • {total.toFixed(2)} SAR
-              </Text>
+              {checkoutLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-white text-xl font-bold">
+                  Proceed to Checkout • {total.toFixed(2)} SAR
+                </Text>
+              )}
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               onPress={handleClearCart}
               className="mt-3 items-center"
